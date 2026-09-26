@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { geoNodeKinds, nodeKindLabel } from "@/lib/node-kind";
 import { pageTitle } from "@/lib/page-title";
 import {
   type AdminNodeListKind,
@@ -36,19 +37,12 @@ type AdminNodeSearch = {
   kind?: AdminNodeListKind;
 };
 
-const NODE_KIND_VALUES = [
-  "all",
-  "country",
-  "state",
-  "city",
-] as const satisfies readonly AdminNodeListKind[];
+const NODE_KIND_VALUES = ["all", ...geoNodeKinds] as const satisfies readonly AdminNodeListKind[];
 
-const NODE_KIND_LABELS: Record<AdminNodeListKind, string> = {
+const NODE_KIND_LABELS = {
   all: "All kinds",
-  country: "Country",
-  state: "State",
-  city: "City",
-};
+  ...Object.fromEntries(geoNodeKinds.map((kind) => [kind, nodeKindLabel(kind)])),
+} as Record<AdminNodeListKind, string>;
 
 function parseScope(value: unknown): AdminNodeListScope | undefined {
   return value === "roots" || value === "all" ? value : undefined;
@@ -114,7 +108,9 @@ function AdminNodes() {
         accessorFn: (row) => row.node.kind,
         header: "Kind",
         cell: ({ row }) => (
-          <span className="text-muted-foreground">{humanize(row.original.node.kind)}</span>
+          <span className="text-muted-foreground">
+            {nodeKindLabel(row.original.node.kind, "—")}
+          </span>
         ),
       },
       {
@@ -275,7 +271,7 @@ function AdminNodes() {
                       <span className="min-w-0 truncate">{row.node.name}</span>
                     </ItemTitle>
                     <ItemDescription>
-                      {humanize(row.node.kind)}
+                      {nodeKindLabel(row.node.kind, "Node")}
                       {row.parent ? ` in ${row.parent.name}` : ""} · {row.validatorCount}{" "}
                       {row.validatorCount === 1 ? "validator" : "validators"}
                     </ItemDescription>
