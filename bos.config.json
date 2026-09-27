@@ -27,8 +27,8 @@
       "development": "local:ui",
       "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/ui/",
       "ssr": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/ui/ssr/",
-      "integrity": "sha384-ytJtmfXQke7d4QJ7Drkj7SRk6Atv7IRw+b/Cm6WLML0XacHH1eLahe5+rgStlTnp",
-      "ssrIntegrity": "sha384-wJoIvToiUH4dDH2wwO5dmQVAA8iT4ElWSd3GGsgUqsft0mjNGrE/WK2RxA1XJgnr"
+      "integrity": "sha384-qyUSYkFWi2sq1uKrUkMoRGOSOhNv5OMls6Z0SdcI8mMCduwzSMQfXN4ldHo5VQV+",
+      "ssrIntegrity": "sha384-Ou5xDYII7ooc37MJq8jCWvj4N+NqCHe2YlbfYE74a7yx+usf7ZT92q6iKY313zsm"
     },
     "api": {
       "development": "local:api",
@@ -50,9 +50,9 @@
         "name": "_everything_dev_auth_plugin",
         "development": "local:plugins/auth/ui",
         "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/auth-ui/",
-        "integrity": "sha384-1b0Cgp7GUwogVIeZq1bImmhMvtotn6VX/GkTsLDXniNayKrM5n0pw5uszTLD3I0v",
+        "integrity": "sha384-9QLEsKamPesmC8HuGwzAmlC9qNykn6zr/kJD4se/pREvC6xOuoDu8xk9gSD6X8Rw",
         "ssr": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/auth-ui/ssr/",
-        "ssrIntegrity": "sha384-g7YMg+cy5nmWvkI0xgT/pWXsYliIhRnmb1UYPFmwMYOhFPw6o13jE+60MHxnVruH"
+        "ssrIntegrity": "sha384-hzF8svKh6WfcQVOz72jmdQqmhWxkKzcvYKBeduMXfBlBCjSMrthdTAvEizyLLfvJ"
       },
       "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/auth/",
       "secrets": [
@@ -128,7 +128,7 @@
           }
         }
       },
-      "integrity": "sha384-RvjbukXVXlMN1Ra1Nx9wCBveIUxZCOtxmjGy3MEtKTe7dWZ23Op9DyI+s6kSbonI"
+      "integrity": "sha384-k7UvpUQf0p+UfmUpKM2z/MQATLltym+U1SYAzw4Kcl+HeHgK3ef+SSEtDanQ2gp5"
     }
   },
   "plugins": {
