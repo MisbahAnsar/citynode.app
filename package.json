@@ -41,7 +41,7 @@
       "@types/node": "^25.0.3",
       "@types/react": "^19.2.7",
       "@types/react-dom": "^19.2.3",
-      "effect": "4.0.0-rc.112",
+      "effect": "4.0.0-rc.117",
       "zod": "4.6.5",
       "@orpc/contract": "2.0.0-beta.35",
       "@orpc/server": "2.0.0-beta.35",
@@ -70,7 +70,7 @@
     }
   },
   "scripts": {
-    "prepare": "git -C repos/effect remote >/dev/null 2>&1 || git clone --depth 1 --branch effect@4.0.0-rc.112 https://github.com/Effect-TS/effect.git repos/effect; mkdir -p node_modules/@effect && ln -sfn ../../repos/effect/packages/tools/oxc node_modules/@effect/oxc && effect-tsgo patch --oxlint",
+    "prepare": "git -C repos/effect remote >/dev/null 2>&1 || git clone --depth 1 --branch effect@4.0.0-rc.117 https://github.com/Effect-TS/effect.git repos/effect; mkdir -p node_modules/@effect && ln -sfn ../../repos/effect/packages/tools/oxc node_modules/@effect/oxc && effect-tsgo patch --oxlint",
     "init": "bun run db:migrate",
     "dev": "bun --conditions=development packages/everything-dev/src/cli.ts dev",
     "dev:ui": "bun --conditions=development packages/everything-dev/src/cli.ts dev --api remote",
@@ -78,6 +78,8 @@
     "dev:proxy": "bun --conditions=development packages/everything-dev/src/cli.ts dev --proxy",
     "build": "bun packages/everything-dev/src/cli.ts build",
     "deploy": "bun packages/everything-dev/src/cli.ts build --deploy",
+    "infra:deploy": "cd infra && bun run alchemy deploy",
+    "infra:plan": "cd infra && bun run alchemy plan",
     "publish": "bun packages/everything-dev/src/cli.ts publish",
     "bos": "bun --conditions=development packages/everything-dev/src/cli.ts",
     "typecheck": "BOS_NO_BANNER=1 bun run bos typecheck",

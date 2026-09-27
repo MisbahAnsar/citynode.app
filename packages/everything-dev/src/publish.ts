@@ -3,6 +3,7 @@ import { join } from "node:path";
 import process from "node:process";
 import { readSessionHandle } from "./auth-session";
 import { buildWorkspaceTargets, resolveWorkspaceTarget, selectWorkspaceTargets } from "./build";
+import { resolveCdnDeployInputs } from "./cdn-deploy";
 import { generateCodeArtifacts } from "./code-artifacts";
 import { loadResolvedConfig } from "./config";
 import type { WorkspaceDeployResult } from "./contract";
@@ -22,6 +23,7 @@ import {
 } from "./near-signer";
 import { getNetworkIdForAccount } from "./network";
 import { platformUrlDeployEntries } from "./platform-deploy";
+import { collectDistFiles, uploadWorkspaceDist } from "./storage-upload";
 import type { BosConfig, BosConfigInput, PublishConfig, RuntimeConfig } from "./types";
 import { padRight } from "./utils/string";
 import { colors, icons } from "./utils/theme";
@@ -265,24 +267,76 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
   const rawConfig = JSON.parse(readFileSync(rawConfigPath, "utf-8")) as BosConfigInput;
   let publishPayload: BosConfigInput = isStaging ? { ...rawConfig, domain: gateway } : rawConfig;
 
-  // Image-native deploy (plan 043): artifacts ship inside the runtime image
-  // and each host serves its own namespace from its own filesystem — the
-  // publish writes the deterministic bundle URLs, nothing is uploaded.
-  const origin = `https://${gateway}`;
+  // CDN deploy (ADR 0020): the resolution chain (env → bos login session →
+  // derived from the base's inherited bundle URLs) lives in cdn-deploy.ts.
+  // The image keeps only the boot role.
+  const session = readSessionHandle(configDir);
+  const cdnDeploy = resolveCdnDeployInputs({
+    env: process.env as Record<string, string | undefined>,
+    runtimeConfig: runtimeConfig ?? null,
+    session: session?.credential ?? null,
+    account,
+    gateway,
+  });
+  if (cdnDeploy.error) {
+    return {
+      status: "error",
+      registryUrl,
+      built,
+      skipped,
+      deployResults,
+      error: cdnDeploy.error,
+    };
+  }
+  const cdnOrigin = cdnDeploy.cdnOrigin;
+  const storageOrigin = cdnDeploy.storageOrigin;
+  const storageApiKey = cdnDeploy.apiKey;
+  const urlOrigin = cdnOrigin ?? `https://${gateway}`;
   const deployTargets = (built ?? []).filter((key) => targets.includes(key));
   const platformEntries: DeployResultEntry[] = [];
 
   console.log();
-  console.log("  Image-native deploy — writing bundle URLs from the runtime origin...");
+  if (cdnOrigin) {
+    console.log(`  CDN deploy — uploading workspace dists to ${storageOrigin}...`);
+  } else {
+    console.log("  Image-native deploy — writing bundle URLs from the runtime origin...");
+  }
   for (const key of deployTargets) {
     const ws = resolveWorkspaceTarget(key, bosConfig, runtimeConfig, configDir);
     if (!ws) continue;
 
-    platformEntries.push(
-      ...platformUrlDeployEntries({ origin, account, gateway, key, kind: ws.kind }),
-    );
+    let integrity: string | undefined;
+    let ssrIntegrity: string | undefined;
+    let fileCount: number | undefined;
+    if (cdnOrigin) {
+      const result = await uploadWorkspaceDist({
+        origin: storageOrigin,
+        apiKey: storageApiKey,
+        account,
+        gateway,
+        workspace: key,
+        files: await collectDistFiles(join(ws.path, "dist")),
+      });
+      integrity = result.integrity["remoteEntry.js"];
+      ssrIntegrity =
+        result.integrity["ssr/remoteEntry.server.js"] ?? result.integrity["remoteEntry.server.js"];
+      fileCount = result.stored;
+    }
+
     console.log(
-      `    ${colors.green(icons.ok)} ${padRight(key, 28)} → https://${gateway}/bundles/${account}/${gateway}/${key}/`,
+      `    ${colors.green(icons.ok)} ${padRight(key, 28)} → ${urlOrigin}/bundles/${account}/${gateway}/${key}/${fileCount !== undefined ? ` (${fileCount} files)` : ""}`,
+    );
+
+    platformEntries.push(
+      ...platformUrlDeployEntries({
+        origin: urlOrigin,
+        account,
+        gateway,
+        key,
+        kind: ws.kind,
+        integrity,
+        ssrIntegrity,
+      }),
     );
   }
 

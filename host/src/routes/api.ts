@@ -12,15 +12,13 @@ import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { timeout } from "hono/timeout";
 import type { AuthVariables } from "../lib/auth";
-import { API_TIMEOUT_MS, BODY_LIMIT_MAX } from "../middleware/security";
+import { API_TIMEOUT_MS, BODY_LIMIT_MAX, bundleUploadBodyLimitBytes } from "../middleware/security";
 import { proxyRequest } from "../middleware/static-proxy";
 import { buildPluginContext, type createSessionMiddleware } from "../services/auth";
 import type { RuntimeConfig } from "../services/config";
 import { mountMcpRoute } from "../services/mcp";
 import type { PluginResult } from "../services/plugins";
 import { logger } from "../utils/logger";
-import { createBundleFsHandler } from "./bundles";
-import { createBundleProxyCacheHandler, deriveNamespaceOrigins } from "./bundles-proxy";
 import {
   getHealthStatus,
   getMemorySnapshot,
@@ -109,19 +107,6 @@ export async function setupApiRoutes(
     throw new Error("API config is required to start the host");
   }
 
-  // FS-backed bundle serving (plan 043) — first handler on /bundles/*: the
-  // image stages its own artifacts and serves them same-origin. Unset
-  // BOS_BUNDLE_DIR (registry tier / child runtimes) falls through to the
-  // foreign-namespace proxy cache, then the proxy/oRPC routes.
-  app.all("/bundles/*", createBundleFsHandler(process.env.BOS_BUNDLE_DIR));
-  app.all(
-    "/bundles/*",
-    createBundleProxyCacheHandler({
-      namespaceOrigins: deriveNamespaceOrigins(config),
-      cacheDir: process.env.BOS_BUNDLE_CACHE_DIR,
-    }),
-  );
-
   const isProxyMode = process.argv.includes("--proxy");
 
   const publicRpcRouters = new Map<string, { handler: RPCHandler<any>; effectContext: unknown }>();
@@ -162,8 +147,6 @@ export async function setupApiRoutes(
     const proxyTarget = apiConfig.proxy!;
     logger.info(`[API] Proxy mode enabled → ${proxyTarget}`);
 
-    app.all("/bundles/*", (c: Context<HonoEnv>) => proxyRequest(c.req.raw, proxyTarget, true));
-
     app.all("/api/*", async (c: Context<HonoEnv>) => {
       if (c.req.path === HEALTH_PATH) {
         return c.json(getHealthStatus(plugins, loadingState));
@@ -193,7 +176,19 @@ export async function setupApiRoutes(
     onError: (c) => c.json({ error: "Request body too large" }, 413),
   });
 
-  app.use("/api/*", apiBodyLimit);
+  // Route-scoped limit for bundle uploads (ADR 0015/0020): the global
+  // /api/* limit skips the path — Hono runs every matching middleware, so
+  // two limits would compose to the smaller ceiling.
+  const STORAGE_BUNDLE_PATH = "/api/storage/bundles";
+  const storageBodyLimit = bodyLimit({
+    maxSize: Math.ceil(bundleUploadBodyLimitBytes()),
+    onError: (c) => c.json({ error: "Bundle upload too large" }, 413),
+  });
+  app.use(STORAGE_BUNDLE_PATH, storageBodyLimit);
+  app.use("/api/*", (c, next) => {
+    if (c.req.path === STORAGE_BUNDLE_PATH) return next();
+    return apiBodyLimit(c, next);
+  });
 
   app.use(
     "/api/*",
@@ -294,9 +289,6 @@ export async function setupApiRoutes(
     return handleOrpc(c, rpcHandler, "/api/rpc", mergedEffectContext);
   });
   app.all("/api", (c: Context<HonoEnv>) => handleOrpc(c, apiHandler, "/api", mergedEffectContext));
-  app.all("/bundles/*", (c: Context<HonoEnv>) =>
-    handleOrpc(c, apiHandler, "/", mergedEffectContext),
-  );
   app.all("/api/*", (c: Context<HonoEnv>) =>
     handleOrpc(c, apiHandler, "/api", mergedEffectContext),
   );
