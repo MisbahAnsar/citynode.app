@@ -1,4 +1,10 @@
-import { ArrowsLeftRightIcon, CheckIcon, CopyIcon, SparkleIcon } from "@phosphor-icons/react";
+import {
+  ArrowsLeftRightIcon,
+  ArrowUpRightIcon,
+  CheckIcon,
+  CopyIcon,
+  SparkleIcon,
+} from "@phosphor-icons/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
@@ -27,6 +33,12 @@ If this is a new application, design it around the 1Click API.
 
 Then build it one slice at a time, test-first.`;
 
+type BuildPromptLink = {
+  label: string;
+  href: string;
+  testId: string;
+};
+
 type BuildPrompt = {
   id: string;
   testId: string;
@@ -34,6 +46,7 @@ type BuildPrompt = {
   description: string;
   icon: typeof SparkleIcon;
   prompt: string;
+  links: BuildPromptLink[];
 };
 
 const BUILD_PROMPTS: BuildPrompt[] = [
@@ -45,6 +58,15 @@ const BUILD_PROMPTS: BuildPrompt[] = [
       "Copy a prompt that teaches your agent to build with verifiable private inference on NEAR AI Cloud.",
     icon: SparkleIcon,
     prompt: PRIVATE_INFERENCE_PROMPT,
+    links: [
+      { label: "cloud.near.ai", href: "https://cloud.near.ai", testId: "build.link-cloud" },
+      {
+        label: "cloud.near.ai/models",
+        href: "https://cloud.near.ai/models",
+        testId: "build.link-models",
+      },
+      { label: "docs.near.ai", href: "https://docs.near.ai", testId: "build.link-docs" },
+    ],
   },
   {
     id: "near-intents",
@@ -54,6 +76,13 @@ const BUILD_PROMPTS: BuildPrompt[] = [
       "Copy a prompt that teaches your agent to build cross-chain swaps with NEAR Intents and confidential AI.",
     icon: ArrowsLeftRightIcon,
     prompt: NEAR_INTENTS_PROMPT,
+    links: [
+      {
+        label: "docs.near-intents.org",
+        href: "https://docs.near-intents.org",
+        testId: "build.link-intents-docs",
+      },
+    ],
   },
 ];
 
@@ -72,34 +101,50 @@ export function BuildPrompts() {
   };
 
   return (
-    <div className="flex w-full flex-col gap-3" data-testid="build.prompts">
+    <div className="flex w-full flex-col gap-4" data-testid="build.prompts">
       {BUILD_PROMPTS.map((entry) => {
         const Icon = entry.icon;
         const copied = copiedId === entry.id;
         return (
-          <Item
-            key={entry.id}
-            variant="outline"
-            data-testid={entry.testId}
-            render={<button type="button" onClick={() => void copy(entry)} />}
-          >
-            <ItemMedia variant="icon">
-              {copied ? (
-                <CheckIcon className="text-foreground" />
-              ) : (
-                <Icon className="text-muted-foreground" />
-              )}
-            </ItemMedia>
-            <ItemContent>
-              <ItemTitle>{entry.title}</ItemTitle>
-              <ItemDescription>
-                {copied ? "Copied — paste it into your AI agent." : entry.description}
-              </ItemDescription>
-            </ItemContent>
-            <ItemMedia variant="icon">
-              {copied ? <CheckIcon /> : <CopyIcon className="text-muted-foreground" />}
-            </ItemMedia>
-          </Item>
+          <div key={entry.id} className="flex flex-col gap-2">
+            <Item
+              variant="outline"
+              data-testid={entry.testId}
+              render={<button type="button" onClick={() => void copy(entry)} />}
+            >
+              <ItemMedia variant="icon">
+                {copied ? (
+                  <CheckIcon className="text-foreground" />
+                ) : (
+                  <Icon className="text-muted-foreground" />
+                )}
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle>{entry.title}</ItemTitle>
+                <ItemDescription>
+                  {copied ? "Copied — paste it into your AI agent." : entry.description}
+                </ItemDescription>
+              </ItemContent>
+              <ItemMedia variant="icon">
+                {copied ? <CheckIcon /> : <CopyIcon className="text-muted-foreground" />}
+              </ItemMedia>
+            </Item>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs">
+              {entry.links.map((link) => (
+                <a
+                  key={link.testId}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid={link.testId}
+                  className="inline-flex items-center gap-1 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                >
+                  {link.label}
+                  <ArrowUpRightIcon className="size-3.5" />
+                </a>
+              ))}
+            </div>
+          </div>
         );
       })}
     </div>

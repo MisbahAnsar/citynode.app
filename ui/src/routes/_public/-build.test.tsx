@@ -85,4 +85,21 @@ describe("build page", () => {
     );
     expect(harness.clipboardWriteText).toHaveBeenCalledTimes(2);
   });
+
+  it("links directly to the NEAR AI Cloud and NEAR Intents docs", async () => {
+    await renderBuild();
+
+    const expected = [
+      ["build.link-cloud", "https://cloud.near.ai"],
+      ["build.link-models", "https://cloud.near.ai/models"],
+      ["build.link-docs", "https://docs.near.ai"],
+      ["build.link-intents-docs", "https://docs.near-intents.org"],
+    ] as const;
+
+    for (const [testId, href] of expected) {
+      const anchor = await screen.findByTestId(testId);
+      expect(anchor.getAttribute("href")).toBe(href);
+      expect(anchor.getAttribute("target")).toBe("_blank");
+    }
+  });
 });
