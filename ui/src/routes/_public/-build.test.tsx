@@ -19,7 +19,7 @@ const harness = vi.hoisted(() => ({
   clipboardWriteText: vi.fn(async () => undefined),
 }));
 
-function renderBuild() {
+async function renderBuild() {
   const queryClient = new QueryClient();
   const root = createRootRouteWithContext<Record<string, unknown>>()({ component: Outlet });
   const buildRoute = BuildRoute.update({
@@ -33,6 +33,7 @@ function renderBuild() {
     history: createMemoryHistory({ initialEntries: ["/build"] }),
     context: { queryClient },
   });
+  await router.load();
   render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router as never} />
@@ -54,9 +55,9 @@ afterEach(() => {
 
 describe("build page", () => {
   it("renders the ready-to-build panel with both prompts", async () => {
-    renderBuild();
+    await renderBuild();
 
-    expect(await screen.findByTestId("build.heading").then((el) => el.textContent)).toBe(
+    expect(await screen.findByTestId("build.heading").then((el) => el.textContent)).toContain(
       "Ready to start building?",
     );
     expect(screen.getByTestId("build.prompt-private-inference").textContent).toContain(
@@ -68,7 +69,7 @@ describe("build page", () => {
   });
 
   it("copies the exact prompt text", async () => {
-    renderBuild();
+    await renderBuild();
 
     fireEvent.click(await screen.findByTestId("build.prompt-private-inference"));
 

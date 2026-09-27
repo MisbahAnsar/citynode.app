@@ -23,7 +23,7 @@ function flattenSlugs(items: SidebarItem[]): string[] {
 }
 
 describe("sidebar navigation", () => {
-  it("orders the sidebar as Home, Explore, Stake, My community, Organization, Things, Directory, Admin", () => {
+  it("orders the sidebar as Home, Explore, Stake, Build, My community, Organization, Things, Directory, Admin", () => {
     const labels = filterSidebarByRole(buildNavItems({ isAdmin: true }), "admin").map(
       (item) => item.label,
     );
@@ -31,6 +31,7 @@ describe("sidebar navigation", () => {
       "Home",
       "Explore",
       "Stake",
+      "Build",
       "My community",
       "Organization",
       "Things",
@@ -46,6 +47,7 @@ describe("sidebar navigation", () => {
         "dashboard",
         "explore",
         "stake",
+        "build",
         "my-node",
         "orgs",
         "things",

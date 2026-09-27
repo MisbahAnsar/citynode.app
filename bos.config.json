@@ -47,7 +47,7 @@
       "name": "@everything-dev/auth-plugin",
       "development": "local:plugins/auth",
       "ui": {
-        "name": "auth-ui",
+        "name": "_everything_dev_auth_plugin",
         "development": "local:plugins/auth/ui",
         "production": "https://cdn.everything.dev/bundles/v1.citynode.near/citynode.app/auth-ui/",
         "integrity": "sha384-1b0Cgp7GUwogVIeZq1bImmhMvtotn6VX/GkTsLDXniNayKrM5n0pw5uszTLD3I0v",
