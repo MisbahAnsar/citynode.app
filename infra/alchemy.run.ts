@@ -20,7 +20,7 @@ export default Alchemy.Stack(
 
     const bucket = yield* Cloudflare.R2.Bucket("Bundles", {
       name: bucketName,
-      domains: [BUNDLE_CDN_DOMAIN],
+      domains: [{ name: BUNDLE_CDN_DOMAIN }],
     }).pipe(RemovalPolicy.retain());
 
     const s3Token = yield* Cloudflare.ApiToken.AccountApiToken("BundlesS3", {
