@@ -42,7 +42,7 @@ const authStub = {
         eventName: input.eventName,
         teamId: "event-team",
         role: "member",
-        maxUses: input.maxUses ?? 50,
+        maxUses: input.maxUses ?? 300,
         usedCount: 0,
         expiresAt: input.expiresAt,
         revokedAt: null,

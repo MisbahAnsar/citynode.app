@@ -36,7 +36,7 @@ describe("onboarding handlers", () => {
 
     expect(result.code).toHaveLength(43);
     expect(result.eventName).toBe("Launch Night");
-    expect(result.maxUses).toBe(50);
+    expect(result.maxUses).toBe(300);
     expect(result.usedCount).toBe(0);
 
     const team = await services.services.db.query.team.findFirst({

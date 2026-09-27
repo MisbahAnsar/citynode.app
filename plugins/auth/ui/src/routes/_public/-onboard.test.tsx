@@ -8,13 +8,16 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NEAR_INTENTS_PROMPT, PRIVATE_INFERENCE_PROMPT } from "./-build-prompts";
 import { Route as OnboardRoute } from "./onboard";
 
 const harness = vi.hoisted(() => ({
   session: null as { user: { id: string; name: string } } | null,
   getOnboardingCodeInfo: vi.fn(),
   redeemOnboardingCode: vi.fn(),
+  clipboardWriteText: vi.fn(async () => undefined),
 }));
 
 vi.mock("everything-dev/ui/auth", () => ({
@@ -75,6 +78,13 @@ function renderOnboard() {
   );
 }
 
+beforeEach(() => {
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText: harness.clipboardWriteText },
+    configurable: true,
+  });
+});
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -115,5 +125,41 @@ describe("onboard join flow", () => {
     expect(await screen.findByTestId("onboard.continue-on-computer")).toBeTruthy();
     expect(screen.getByTestId("onboard.gateway-origin").textContent).toBe("localhost:3000");
     expect(screen.queryByTestId("onboard.display-name")).toBeNull();
+  });
+
+  it("offers build prompts on the done state and copies their exact text", async () => {
+    harness.session = { user: { id: "user-1", name: "Grace" } };
+    harness.getOnboardingCodeInfo.mockResolvedValue(info);
+    harness.redeemOnboardingCode.mockResolvedValue({
+      organizationName: "Chicago Builders",
+      eventName: "Launch Night",
+    });
+
+    renderOnboard();
+
+    await screen.findByTestId("onboard.display-name");
+    fireEvent.click(screen.getByTestId("onboard.display-name-skip"));
+
+    expect(await screen.findByTestId("onboard.build-prompts")).toBeTruthy();
+    expect(screen.getByTestId("onboard.prompt-private-inference").textContent).toContain(
+      "Integrate NEAR AI Private Inference",
+    );
+    expect(screen.getByTestId("onboard.prompt-near-intents").textContent).toContain(
+      "Integrate NEAR Intents",
+    );
+
+    fireEvent.click(screen.getByTestId("onboard.prompt-private-inference"));
+
+    await waitFor(() =>
+      expect(harness.clipboardWriteText).toHaveBeenCalledWith(PRIVATE_INFERENCE_PROMPT),
+    );
+    expect(toast.success).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("onboard.prompt-near-intents"));
+
+    await waitFor(() =>
+      expect(harness.clipboardWriteText).toHaveBeenCalledWith(NEAR_INTENTS_PROMPT),
+    );
+    expect(harness.clipboardWriteText).toHaveBeenCalledTimes(2);
   });
 });

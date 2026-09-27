@@ -228,7 +228,7 @@ export function EventOnboardingPanel({
                   data-testid="discovery-onboarding-max-joins"
                   className="w-20"
                   inputMode="numeric"
-                  placeholder="50"
+                  placeholder="300"
                   value={maxJoins}
                   onChange={(event) => setMaxJoins(event.target.value)}
                 />

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
 import { getGatewayOrigin } from "@/lib/gateway-origin";
+import { BuildPrompts } from "./-build-prompts";
 import { DisplayNameStep } from "./-display-name-step";
 import { OnboardSignUp } from "./-onboard-sign-up";
 import "../../styles.css";
@@ -105,6 +106,7 @@ function OnboardPage() {
         titleTestId="onboard.heading"
         description={joinedLine}
       >
+        <BuildPrompts />
         <Item variant="muted" data-testid="onboard.continue-on-computer">
           <ItemMedia variant="icon">
             <DesktopIcon />
