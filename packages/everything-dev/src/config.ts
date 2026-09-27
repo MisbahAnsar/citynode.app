@@ -130,7 +130,13 @@ export function isAppDescriptorPath(configPath: string): boolean {
  * extends chain unchanged.
  */
 export async function loadAppDescriptorConfig(resolvedPath: string): Promise<BosConfigInput> {
-  const mod = (await import(pathToFileURL(resolvedPath).href)) as Record<string, unknown>;
+  // webpackIgnore: the path is inherently runtime-resolved — bundlers must
+  // not try to statically analyze it (rsbuild otherwise warns "Critical
+  // dependency: the request of a dependency is an expression").
+  const mod = (await import(/* webpackIgnore: true */ pathToFileURL(resolvedPath).href)) as Record<
+    string,
+    unknown
+  >;
   if (!mod.default) {
     throw new Error(`${resolvedPath} must default-export an App() descriptor`);
   }
@@ -1337,6 +1343,10 @@ function buildRuntimeUiConfig(
         : resolveRuntimeTarget(uiProduction, providerBaseDir, "remote")
       : undefined;
   if (!uiRuntime) return undefined;
+  // A remote ui target with no URL is not a deployable surface (e.g. a
+  // plugin ui entry with only a development key) — dropping it here keeps
+  // the phantom source out of runtime resolution and client payloads.
+  if (uiRuntime.source === "remote" && !uiRuntime.url) return undefined;
 
   return {
     name: resolveUiRuntimeName(uiConfig, uiRuntime.localPath, apiName),

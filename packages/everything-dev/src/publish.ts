@@ -1,9 +1,11 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
+import { hasFolderFormUi } from "every-plugin/build/ui";
 import { readSessionHandle } from "./auth-session";
 import { buildWorkspaceTargets, resolveWorkspaceTarget, selectWorkspaceTargets } from "./build";
 import { resolveCdnDeployInputs } from "./cdn-deploy";
+import { formatDuration } from "./cli/timing";
 import { generateCodeArtifacts } from "./code-artifacts";
 import { loadResolvedConfig } from "./config";
 import type { WorkspaceDeployResult } from "./contract";
@@ -22,7 +24,7 @@ import {
   submitRegistryWrite,
 } from "./near-signer";
 import { getNetworkIdForAccount } from "./network";
-import { platformUrlDeployEntries } from "./platform-deploy";
+import { platformUrlDeployEntries, pluginUiUrlDeployEntries } from "./platform-deploy";
 import { collectDistFiles, uploadWorkspaceDist } from "./storage-upload";
 import type { BosConfig, BosConfigInput, PublishConfig, RuntimeConfig } from "./types";
 import { padRight } from "./utils/string";
@@ -30,6 +32,11 @@ import { colors, icons } from "./utils/theme";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatBundleMb(files: Array<{ bytes: Uint8Array }>): string {
+  const total = files.reduce((sum, file) => sum + file.bytes.byteLength, 0);
+  return `${(total / 1024 / 1024).toFixed(1)} MB`;
 }
 
 export async function waitForPublishedConfig(opts: {
@@ -309,23 +316,33 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     let ssrIntegrity: string | undefined;
     let fileCount: number | undefined;
     if (cdnOrigin) {
+      const distFiles = await collectDistFiles(join(ws.path, "dist"));
+      const totalMb = formatBundleMb(distFiles);
+      console.log(
+        `    ${padRight(key, 28)} uploading ${distFiles.length} files (${totalMb}) → ${urlOrigin}/bundles/${account}/${gateway}/${key}/`,
+      );
+      const startedAt = Date.now();
       const result = await uploadWorkspaceDist({
         origin: storageOrigin,
         apiKey: storageApiKey,
         account,
         gateway,
         workspace: key,
-        files: await collectDistFiles(join(ws.path, "dist")),
+        files: distFiles,
       });
       integrity = result.integrity["remoteEntry.js"];
       ssrIntegrity =
         result.integrity["ssr/remoteEntry.server.js"] ?? result.integrity["remoteEntry.server.js"];
       fileCount = result.stored;
-    }
 
-    console.log(
-      `    ${colors.green(icons.ok)} ${padRight(key, 28)} → ${urlOrigin}/bundles/${account}/${gateway}/${key}/${fileCount !== undefined ? ` (${fileCount} files)` : ""}`,
-    );
+      console.log(
+        `    ${colors.green(icons.ok)} ${padRight(key, 28)} → ${urlOrigin}/bundles/${account}/${gateway}/${key}/${fileCount !== undefined ? ` (${fileCount} files, ${formatDuration(Date.now() - startedAt)})` : ""}`,
+      );
+    } else {
+      console.log(
+        `    ${colors.green(icons.ok)} ${padRight(key, 28)} → ${urlOrigin}/bundles/${account}/${gateway}/${key}/`,
+      );
+    }
 
     platformEntries.push(
       ...platformUrlDeployEntries({
@@ -338,6 +355,56 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
         ssrIntegrity,
       }),
     );
+
+    // Folder-form plugin ui: the workspace build also produces <plugin>/ui/dist
+    // (web remoteEntry + ssr container) — upload it as its own bundle key and
+    // pin <slot>.<key>.ui.* so the host can compose the ui surface in production.
+    if (hasFolderFormUi(ws.path)) {
+      const uiDistDir = join(ws.path, "ui", "dist");
+      let uiIntegrity: string | undefined;
+      let uiSsrIntegrity: string | undefined;
+      let uiFileCount: number | undefined;
+      if (cdnOrigin && existsSync(uiDistDir)) {
+        const uiDistFiles = await collectDistFiles(uiDistDir);
+        console.log(
+          `    ${padRight(`${key}-ui`, 28)} uploading ${uiDistFiles.length} files (${formatBundleMb(uiDistFiles)}) → ${urlOrigin}/bundles/${account}/${gateway}/${key}-ui/`,
+        );
+        const uiStartedAt = Date.now();
+        const uiResult = await uploadWorkspaceDist({
+          origin: storageOrigin,
+          apiKey: storageApiKey,
+          account,
+          gateway,
+          workspace: `${key}-ui`,
+          files: uiDistFiles,
+        });
+        uiIntegrity = uiResult.integrity["remoteEntry.js"];
+        uiSsrIntegrity =
+          uiResult.integrity["ssr/remoteEntry.server.js"] ??
+          uiResult.integrity["remoteEntry.server.js"];
+        uiFileCount = uiResult.stored;
+
+        console.log(
+          `    ${colors.green(icons.ok)} ${padRight(`${key}-ui`, 28)} → ${urlOrigin}/bundles/${account}/${gateway}/${key}-ui/ (${uiFileCount} files, ${formatDuration(Date.now() - uiStartedAt)})`,
+        );
+      } else {
+        console.log(
+          `    ${colors.green(icons.ok)} ${padRight(`${key}-ui`, 28)} → ${urlOrigin}/bundles/${account}/${gateway}/${key}-ui/`,
+        );
+      }
+
+      platformEntries.push(
+        ...pluginUiUrlDeployEntries({
+          origin: urlOrigin,
+          account,
+          gateway,
+          key,
+          kind: ws.kind,
+          integrity: uiIntegrity,
+          ssrIntegrity: uiSsrIntegrity,
+        }),
+      );
+    }
   }
 
   if (platformEntries.length > 0) {
