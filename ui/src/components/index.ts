@@ -1,3 +1,4 @@
+export { AddEmailDialog } from "./add-email-dialog";
 export {
   ApiKeyForm,
   type ApiKeyFormValues,

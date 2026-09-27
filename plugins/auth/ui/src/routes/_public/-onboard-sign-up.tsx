@@ -42,6 +42,9 @@ export function OnboardSignUp({
     setUnsupported(false);
     await createAccountWithPasskey(auth, {
       onSuccess: async () => {
+        try {
+          sessionStorage.setItem("addEmailPromptPending", "1");
+        } catch {}
         onAccountCreated();
         await refreshSessionCache(auth, queryClient);
         setPending(null);

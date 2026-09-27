@@ -1,0 +1,124 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { refreshSessionCache, useAuthClient } from "everything-dev/ui/auth";
+import { type FormEvent, useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Button } from "./ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
+import { Field, FieldDescription, FieldError, FieldLabel } from "./ui/field";
+import { Input } from "./ui/input";
+
+interface AddEmailDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initialEmail?: string;
+  mode?: "add" | "change";
+}
+
+export function AddEmailDialog({
+  open,
+  onOpenChange,
+  initialEmail = "",
+  mode = "add",
+}: AddEmailDialogProps) {
+  const auth = useAuthClient();
+  const queryClient = useQueryClient();
+  const [email, setEmail] = useState(initialEmail);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setEmail(initialEmail);
+      setError(null);
+    }
+  }, [open, initialEmail]);
+
+  const mutation = useMutation({
+    mutationFn: async (newEmail: string) => {
+      const { error: apiError } = await auth.changeEmail({ newEmail });
+      if (apiError) throw new Error(apiError.message || "Could not save email");
+    },
+    onSuccess: async () => {
+      await refreshSessionCache(auth, queryClient);
+      toast.success(mode === "change" ? "Email updated" : "Email saved");
+      onOpenChange(false);
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+    },
+  });
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed) {
+      setError("Enter your email");
+      return;
+    }
+    setError(null);
+    mutation.mutate(trimmed);
+  };
+
+  const title = mode === "change" ? "Change your email" : "Add your email";
+  const description =
+    mode === "change"
+      ? "Update the email on your account."
+      : "So you can sign in from another device and recover your account.";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{description}</DialogDescription>
+          </DialogHeader>
+          <Field>
+            <FieldLabel htmlFor="add-email-input">Email</FieldLabel>
+            <Input
+              id="add-email-input"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              autoFocus
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+              data-testid="add-email.input"
+            />
+            {error ? (
+              <FieldError>{error}</FieldError>
+            ) : (
+              <FieldDescription>We won't share it. You can change it later.</FieldDescription>
+            )}
+          </Field>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              disabled={mutation.isPending}
+              data-testid="add-email.cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={mutation.isPending || !email.trim()}
+              data-testid="add-email.save"
+            >
+              {mutation.isPending ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

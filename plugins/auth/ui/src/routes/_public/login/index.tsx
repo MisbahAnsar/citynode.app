@@ -162,6 +162,9 @@ function LoginPage() {
     await createAccountWithPasskey(auth, {
       onSuccess: async () => {
         setPending(null);
+        try {
+          sessionStorage.setItem("addEmailPromptPending", "1");
+        } catch {}
         await handleSuccess("Welcome to CityNode");
       },
       onError: (error) => {

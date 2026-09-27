@@ -3,6 +3,7 @@ import {
   CaretRightIcon,
   CoinsIcon,
   CompassIcon,
+  EnvelopeIcon,
   FingerprintIcon,
   GearSixIcon,
   type Icon,
@@ -28,6 +29,7 @@ import type { NextStep, NextStepId } from "./-next-steps";
 
 const STEP_ICONS: Record<NextStepId, Icon> = {
   "save-account": FingerprintIcon,
+  "add-email": EnvelopeIcon,
   "create-org": BuildingsIcon,
   "choose-org": UsersThreeIcon,
   "start-community": RocketLaunchIcon,
@@ -38,10 +40,12 @@ const STEP_ICONS: Record<NextStepId, Icon> = {
   explore: CompassIcon,
 };
 
-function stepLink(step: NextStep, tenantId: string | null): ReactElement {
+function stepLink(step: NextStep, tenantId: string | null): ReactElement | null {
   switch (step.id) {
     case "save-account":
       return <Link to={pluginPath("/settings/auth-methods")} />;
+    case "add-email":
+      return null;
     case "create-org":
       return <Link to="/orgs/new" />;
     case "choose-org":
@@ -61,8 +65,17 @@ function stepLink(step: NextStep, tenantId: string | null): ReactElement {
   }
 }
 
-function FeaturedStep({ step, tenantId }: { step: NextStep; tenantId: string | null }) {
+function FeaturedStep({
+  step,
+  tenantId,
+  onSelect,
+}: {
+  step: NextStep;
+  tenantId: string | null;
+  onSelect?: (id: NextStepId) => void;
+}) {
   const StepIcon = STEP_ICONS[step.id];
+  const render = stepLink(step, tenantId);
   return (
     <Item variant="muted" data-testid={`home-step-${step.id}`}>
       <ItemMedia variant="icon">
@@ -73,18 +86,33 @@ function FeaturedStep({ step, tenantId }: { step: NextStep; tenantId: string | n
         <ItemDescription>{step.description}</ItemDescription>
       </ItemContent>
       <ItemActions className="w-full sm:w-auto">
-        <Button className="w-full sm:w-auto" nativeButton={false} render={stepLink(step, tenantId)}>
-          {step.actionLabel}
-        </Button>
+        {render ? (
+          <Button className="w-full sm:w-auto" nativeButton={false} render={render}>
+            {step.actionLabel}
+          </Button>
+        ) : (
+          <Button className="w-full sm:w-auto" onClick={() => onSelect?.(step.id)}>
+            {step.actionLabel}
+          </Button>
+        )}
       </ItemActions>
     </Item>
   );
 }
 
-function StepRow({ step, tenantId }: { step: NextStep; tenantId: string | null }) {
+function StepRow({
+  step,
+  tenantId,
+  onSelect,
+}: {
+  step: NextStep;
+  tenantId: string | null;
+  onSelect?: (id: NextStepId) => void;
+}) {
   const StepIcon = STEP_ICONS[step.id];
-  return (
-    <Item variant="outline" render={stepLink(step, tenantId)} data-testid={`home-step-${step.id}`}>
+  const render = stepLink(step, tenantId);
+  const shared = (
+    <>
       <ItemMedia variant="icon">
         <StepIcon />
       </ItemMedia>
@@ -95,6 +123,22 @@ function StepRow({ step, tenantId }: { step: NextStep; tenantId: string | null }
       <ItemActions>
         <CaretRightIcon className="size-4 text-muted-foreground" />
       </ItemActions>
+    </>
+  );
+  if (render) {
+    return (
+      <Item variant="outline" render={render} data-testid={`home-step-${step.id}`}>
+        {shared}
+      </Item>
+    );
+  }
+  return (
+    <Item
+      variant="outline"
+      render={<button type="button" onClick={() => onSelect?.(step.id)} />}
+      data-testid={`home-step-${step.id}`}
+    >
+      {shared}
     </Item>
   );
 }
@@ -103,19 +147,21 @@ export function NextStepsList({
   steps,
   tenantId,
   primary,
+  onSelect,
 }: {
   steps: NextStep[];
   tenantId: string | null;
   primary: boolean;
+  onSelect?: (id: NextStepId) => void;
 }) {
   const [first, ...rest] = steps;
   const featured = primary && first ? first : null;
   const rows = featured ? rest : steps;
   return (
     <ItemGroup data-testid="home-next-steps">
-      {featured && <FeaturedStep step={featured} tenantId={tenantId} />}
+      {featured && <FeaturedStep step={featured} tenantId={tenantId} onSelect={onSelect} />}
       {rows.map((step) => (
-        <StepRow key={step.id} step={step} tenantId={tenantId} />
+        <StepRow key={step.id} step={step} tenantId={tenantId} onSelect={onSelect} />
       ))}
     </ItemGroup>
   );

@@ -1,9 +1,10 @@
-import { CopyIcon, WarningIcon } from "@phosphor-icons/react";
+import { CopyIcon, EnvelopeIcon, WarningIcon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { sessionQueryKey, sessionQueryOptions, useAuthClient } from "everything-dev/ui/auth";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
+import { AddEmailDialog } from "@/components/add-email-dialog";
 import { SectionHeader } from "@/components/layout/section-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { isSyntheticEmail } from "@/lib/synthetic-email";
 
 type ProfileUser = {
   id: string;
@@ -30,8 +32,12 @@ export function ProfileSettings() {
   const auth = useAuthClient();
   const { data: session } = useQuery(sessionQueryOptions(auth));
   const user = session?.user;
+  const [addEmailOpen, setAddEmailOpen] = useState(false);
 
   if (!user) return null;
+
+  const emailIsSynthetic = isSyntheticEmail(user.email);
+  const showAddEmailPrompt = !user.isAnonymous && emailIsSynthetic;
 
   return (
     <>
@@ -64,9 +70,37 @@ export function ProfileSettings() {
             </ItemActions>
           </Item>
         )}
+        {showAddEmailPrompt && (
+          <Item variant="muted" data-testid="settings.add-email-prompt">
+            <ItemMedia variant="icon">
+              <EnvelopeIcon />
+            </ItemMedia>
+            <ItemContent>
+              <ItemTitle>Add your email</ItemTitle>
+              <ItemDescription>
+                Sign in from another device and recover your account.
+              </ItemDescription>
+            </ItemContent>
+            <ItemActions className="w-full sm:w-auto">
+              <Button
+                className="w-full sm:w-auto"
+                onClick={() => setAddEmailOpen(true)}
+                data-testid="settings.add-email-button"
+              >
+                Add email
+              </Button>
+            </ItemActions>
+          </Item>
+        )}
         <DisplayNameForm key={user.name ?? ""} user={user} />
       </section>
-      <AccountDetails user={user} />
+      <AccountDetails user={user} onChangeEmail={() => setAddEmailOpen(true)} />
+      <AddEmailDialog
+        open={addEmailOpen}
+        onOpenChange={setAddEmailOpen}
+        initialEmail={emailIsSynthetic ? "" : (user.email ?? "")}
+        mode={emailIsSynthetic ? "add" : "change"}
+      />
     </>
   );
 }
@@ -126,7 +160,7 @@ function DisplayNameForm({ user }: { user: ProfileUser }) {
   );
 }
 
-function AccountDetails({ user }: { user: ProfileUser }) {
+function AccountDetails({ user, onChangeEmail }: { user: ProfileUser; onChangeEmail: () => void }) {
   const copyId = async () => {
     try {
       await navigator.clipboard.writeText(user.id);
@@ -136,14 +170,41 @@ function AccountDetails({ user }: { user: ProfileUser }) {
     }
   };
 
+  const emailIsSynthetic = isSyntheticEmail(user.email);
+  const emailValue: React.ReactNode =
+    emailIsSynthetic || user.isAnonymous ? (
+      <span className="inline-flex items-center gap-2">
+        <span className="text-muted-foreground">Not linked</span>
+        {!user.isAnonymous && (
+          <Button
+            variant="link"
+            size="xs"
+            onClick={onChangeEmail}
+            data-testid="settings.account-add-email"
+          >
+            Add
+          </Button>
+        )}
+      </span>
+    ) : (
+      <span className="inline-flex max-w-full items-center gap-2">
+        <span className="min-w-0 truncate">{user.email}</span>
+        <Button
+          variant="link"
+          size="xs"
+          onClick={onChangeEmail}
+          data-testid="settings.account-change-email"
+        >
+          Change
+        </Button>
+      </span>
+    );
+
   return (
     <section className="flex flex-col gap-6">
       <SectionHeader title="Account" />
       <div className="flex flex-col">
-        <InfoRow
-          label="Email"
-          value={user.email && !user.isAnonymous ? user.email : "Not linked"}
-        />
+        <InfoRow label="Email" value={emailValue} />
         <InfoRow
           label="Account type"
           value={

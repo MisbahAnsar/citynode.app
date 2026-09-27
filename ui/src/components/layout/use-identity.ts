@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import type { Organization } from "@/app";
 import { clearAuthenticatedQueries, sessionQueryOptions, useAuthClient } from "@/app";
 import { getNearInitials, resolveNearImageUrl } from "@/lib/near-profile";
+import { isSyntheticEmail } from "@/lib/synthetic-email";
 import { useNearAccount } from "@/lib/use-near-account";
 
 export function useIdentity() {
@@ -60,7 +61,8 @@ export function useIdentity() {
   });
 
   const avatarSrc = resolveNearImageUrl(nearProfile?.image) ?? user?.image ?? undefined;
-  const validEmail = user && !user.isAnonymous && user.email ? user.email : null;
+  const validEmail =
+    user && !user.isAnonymous && user.email && !isSyntheticEmail(user.email) ? user.email : null;
   const displayName = nearProfile?.name || user?.name || nearAccountId || validEmail || "guest";
   const handle = nearAccountId || validEmail || "anonymous session";
   const showHandle = handle !== displayName;

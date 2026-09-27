@@ -1,5 +1,6 @@
 export type NextStepId =
   | "save-account"
+  | "add-email"
   | "create-org"
   | "choose-org"
   | "start-community"
@@ -20,6 +21,7 @@ export interface NextStepsState {
   isAnonymous: boolean;
   hasPasskey: boolean;
   hasNear: boolean;
+  hasRealEmail: boolean;
   organizationCount: number;
   activeOrganizationName: string | null;
   community: { name: string; tenantId: string } | null;
@@ -36,6 +38,15 @@ export function getNextSteps(state: NextStepsState): NextStep[] {
       title: "Save your account",
       description: "Add a passkey to sign in again later.",
       actionLabel: "Add passkey",
+    });
+  }
+
+  if (!state.isAnonymous && !state.hasRealEmail) {
+    steps.push({
+      id: "add-email",
+      title: "Add your email",
+      description: "Sign in from another device and recover your account.",
+      actionLabel: "Add email",
     });
   }
 

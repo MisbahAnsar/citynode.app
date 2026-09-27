@@ -5,6 +5,7 @@ const base: NextStepsState = {
   isAnonymous: false,
   hasPasskey: true,
   hasNear: false,
+  hasRealEmail: true,
   organizationCount: 1,
   activeOrganizationName: "Harbor",
   community: null,
@@ -33,6 +34,12 @@ describe("home next steps", () => {
 
   it("asks a member of several organizations to pick an active one", () => {
     expect(ids({ organizationCount: 2, activeOrganizationName: null })[0]).toBe("choose-org");
+  });
+
+  it("nudges a signed-in user without a real email to add one", () => {
+    expect(ids({ hasRealEmail: false })).toContain("add-email");
+    expect(ids({ hasRealEmail: true })).not.toContain("add-email");
+    expect(ids({ isAnonymous: true, hasRealEmail: false })).not.toContain("add-email");
   });
 
   it("offers Start a community when the active organization has no community", () => {

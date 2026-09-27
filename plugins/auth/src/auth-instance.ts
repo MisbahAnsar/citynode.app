@@ -507,6 +507,12 @@ export function createAuthInstance(
         },
       },
     },
+    user: {
+      changeEmail: {
+        enabled: true,
+        updateEmailWithoutVerification: true,
+      },
+    },
     account: {
       accountLinking: {
         enabled: true,
