@@ -141,6 +141,38 @@ describe("pluginUiUrlDeployEntries (folder-form plugin ui)", () => {
     expect(authUi.ssr).toBe(`${BASE}/auth-ui/ssr/`);
     expect(authUi.ssrIntegrity).toBe("sha384-ssr");
   });
+
+  it("stamps the built container name over the authored fallback", () => {
+    const config = {
+      account: "v1.citynode.near",
+      domain: "citynode.app",
+      app: {
+        auth: {
+          development: "local:plugins/auth",
+          ui: { name: "auth-ui", development: "local:plugins/auth/ui" },
+        },
+      },
+    };
+
+    const merged = applyDeployResults(
+      config,
+      pluginUiUrlDeployEntries({
+        origin: ORIGIN,
+        account: "v1.citynode.near",
+        gateway: "citynode.app",
+        key: "auth",
+        kind: "app",
+        name: "_everything_dev_auth_plugin",
+      }),
+    );
+
+    const authUi = (merged.app as Record<string, Record<string, unknown>>).auth.ui as Record<
+      string,
+      unknown
+    >;
+    expect(authUi.name).toBe("_everything_dev_auth_plugin");
+    expect(authUi.development).toBe("local:plugins/auth/ui");
+  });
 });
 
 describe("applyPluginPublishUrl (image-native plugin publish)", () => {

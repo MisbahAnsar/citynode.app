@@ -56,8 +56,10 @@ export function pluginUiUrlDeployEntries(input: {
   kind: "app" | "plugin";
   integrity?: string;
   ssrIntegrity?: string;
+  /** The built MF container name — remote boots need it pinned in the config. */
+  name?: string;
 }): DeployResultEntry[] {
-  const { origin, account, gateway, key, kind, integrity, ssrIntegrity } = input;
+  const { origin, account, gateway, key, kind, integrity, ssrIntegrity, name } = input;
   const slot = kind === "app" ? "app" : "plugins";
   const base = `${origin.replace(/\/$/, "")}/bundles/${account}/${gateway}/${key}-ui/`;
   return [
@@ -66,6 +68,9 @@ export function pluginUiUrlDeployEntries(input: {
       integrity,
       urlField: `${slot}.${key}.ui.production`,
       integrityField: `${slot}.${key}.ui.integrity`,
+      ...(name
+        ? { value: name, valueField: `${slot}.${key}.ui.name` }
+        : {}),
     },
     {
       url: `${base}ssr/`,

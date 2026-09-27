@@ -7,7 +7,7 @@ import { buildWorkspaceTargets, resolveWorkspaceTarget, selectWorkspaceTargets }
 import { resolveCdnDeployInputs } from "./cdn-deploy";
 import { formatDuration } from "./cli/timing";
 import { generateCodeArtifacts } from "./code-artifacts";
-import { loadResolvedConfig } from "./config";
+import { loadResolvedConfig, resolveUiRuntimeName } from "./config";
 import type { WorkspaceDeployResult } from "./contract";
 import { ensureDelegateKey, submitRegistryWriteDelegated } from "./delegate-signer";
 import {
@@ -361,6 +361,12 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
     // pin <slot>.<key>.ui.* so the host can compose the ui surface in production.
     if (hasFolderFormUi(ws.path)) {
       const uiDistDir = join(ws.path, "ui", "dist");
+      const uiSlot = ws.kind === "app" ? "app" : "plugins";
+      const rawSlot = (uiSlot === "app" ? rawConfig.app : rawConfig.plugins) as
+        | Record<string, Record<string, unknown> | undefined>
+        | undefined;
+      const rawUi = rawSlot?.[key]?.ui as Record<string, unknown> | undefined;
+      const uiName = resolveUiRuntimeName(rawUi, join(ws.path, "ui"), key);
       let uiIntegrity: string | undefined;
       let uiSsrIntegrity: string | undefined;
       let uiFileCount: number | undefined;
@@ -402,6 +408,7 @@ export async function publishToFastKv(input: PublishToFastKvInput): Promise<Publ
           kind: ws.kind,
           integrity: uiIntegrity,
           ssrIntegrity: uiSsrIntegrity,
+          name: uiName,
         }),
       );
     }
