@@ -395,6 +395,10 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
           ),
         });
         if (already) {
+          await services.db
+            .update(schema.session)
+            .set({ activeOrganizationId: codeRow.organizationId })
+            .where(eq(schema.session.id, sessionData.session.id));
           return {
             success: true,
             alreadyRedeemed: true,

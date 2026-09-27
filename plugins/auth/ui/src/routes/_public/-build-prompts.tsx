@@ -35,7 +35,7 @@ type BuildPrompt = {
 const BUILD_PROMPTS: BuildPrompt[] = [
   {
     id: "private-inference",
-    testId: "onboard.prompt-private-inference",
+    testId: "build.prompt-private-inference",
     title: "Integrate NEAR AI Private Inference",
     description:
       "Copy a prompt that teaches your agent to build with verifiable private inference on NEAR AI Cloud.",
@@ -44,7 +44,7 @@ const BUILD_PROMPTS: BuildPrompt[] = [
   },
   {
     id: "near-intents",
-    testId: "onboard.prompt-near-intents",
+    testId: "build.prompt-near-intents",
     title: "Integrate NEAR Intents",
     description:
       "Copy a prompt that teaches your agent to build cross-chain swaps with NEAR Intents and confidential AI.",
@@ -68,7 +68,7 @@ export function BuildPrompts() {
   };
 
   return (
-    <div className="flex w-full flex-col gap-3" data-testid="onboard.build-prompts">
+    <div className="flex w-full flex-col gap-3" data-testid="build.prompts">
       {BUILD_PROMPTS.map((entry) => {
         const Icon = entry.icon;
         const copied = copiedId === entry.id;
