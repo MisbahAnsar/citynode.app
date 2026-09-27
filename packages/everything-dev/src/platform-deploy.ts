@@ -68,9 +68,7 @@ export function pluginUiUrlDeployEntries(input: {
       integrity,
       urlField: `${slot}.${key}.ui.production`,
       integrityField: `${slot}.${key}.ui.integrity`,
-      ...(name
-        ? { value: name, valueField: `${slot}.${key}.ui.name` }
-        : {}),
+      ...(name ? { value: name, valueField: `${slot}.${key}.ui.name` } : {}),
     },
     {
       url: `${base}ssr/`,
