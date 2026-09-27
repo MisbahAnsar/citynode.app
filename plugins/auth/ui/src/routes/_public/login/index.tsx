@@ -18,12 +18,14 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { markAddEmailPromptPending } from "@/lib/add-email-prompt";
 import { useIsDesktop } from "@/lib/use-client";
 import { useNetworkId } from "@/lib/use-network-id";
 import { PairPanel } from "../-pair-panel";
 
 type SearchParams = {
   redirect?: string;
+  method?: "phone";
 };
 
 type View = "sign-in" | "create" | "phone";
@@ -56,6 +58,7 @@ export const Route = createFileRoute("/_public/login/")({
   ssr: false,
   validateSearch: (search: Record<string, unknown>): SearchParams => ({
     redirect: sanitizeRedirect(search.redirect),
+    method: search.method === "phone" ? ("phone" as const) : undefined,
   }),
   beforeLoad: async ({ context, search }) => {
     const { queryClient, authClient } = context;
@@ -85,11 +88,12 @@ function LoginPage() {
   const auth = useAuthClient();
   const queryClient = useQueryClient();
   const redirectTo = sanitizeRedirect(Route.useSearch().redirect);
+  const wantsPhone = Route.useSearch().method === "phone";
   const banned = useRouterState({ select: (state) => state.location.hash === "banned" });
   const networkId = useNetworkId();
   const isDesktop = useIsDesktop();
 
-  const [view, setView] = useState<View>("sign-in");
+  const [view, setView] = useState<View>(wantsPhone && isDesktop ? "phone" : "sign-in");
   const [pending, setPending] = useState<"passkey" | "near" | "create" | null>(null);
   const [detectedAccount, setDetectedAccount] = useState<string | null>(null);
   const [passkeyMissing, setPasskeyMissing] = useState(false);
@@ -162,9 +166,7 @@ function LoginPage() {
     await createAccountWithPasskey(auth, {
       onSuccess: async () => {
         setPending(null);
-        try {
-          sessionStorage.setItem("addEmailPromptPending", "1");
-        } catch {}
+        markAddEmailPromptPending();
         await handleSuccess("Welcome to CityNode");
       },
       onError: (error) => {

@@ -18,36 +18,36 @@ import { Input } from "@/components/ui/input";
 interface AddEmailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initialEmail?: string;
-  mode?: "add" | "change";
 }
 
-export function AddEmailDialog({
-  open,
-  onOpenChange,
-  initialEmail = "",
-  mode = "add",
-}: AddEmailDialogProps) {
+export function AddEmailDialog({ open, onOpenChange }: AddEmailDialogProps) {
   const auth = useAuthClient();
   const queryClient = useQueryClient();
-  const [email, setEmail] = useState(initialEmail);
+  const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
-      setEmail(initialEmail);
+      setEmail("");
       setError(null);
     }
-  }, [open, initialEmail]);
+  }, [open]);
 
   const mutation = useMutation({
     mutationFn: async (newEmail: string) => {
-      const { error: apiError } = await auth.changeEmail({ newEmail });
-      if (apiError) throw new Error(apiError.message || "Could not save email");
+      const { error: apiError } = await auth.$fetch("/set-email", {
+        method: "POST",
+        body: { email: newEmail },
+      });
+      const message =
+        apiError && typeof apiError === "object" && "message" in apiError
+          ? (apiError as { message?: string }).message
+          : undefined;
+      if (apiError) throw new Error(message || "Could not save email");
     },
     onSuccess: async () => {
       await refreshSessionCache(auth, queryClient);
-      toast.success(mode === "change" ? "Email updated" : "Email saved");
+      toast.success("Email saved");
       onOpenChange(false);
     },
     onError: (err: Error) => {
@@ -66,19 +66,15 @@ export function AddEmailDialog({
     mutation.mutate(trimmed);
   };
 
-  const title = mode === "change" ? "Change your email" : "Add your email";
-  const description =
-    mode === "change"
-      ? "Update the email on your account."
-      : "So you can sign in from another device and recover your account.";
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>{description}</DialogDescription>
+            <DialogTitle>Add your email</DialogTitle>
+            <DialogDescription>
+              So you can sign in from another device and recover your account.
+            </DialogDescription>
           </DialogHeader>
           <Field>
             <FieldLabel htmlFor="add-email-input">Email</FieldLabel>

@@ -94,13 +94,8 @@ export function ProfileSettings() {
         )}
         <DisplayNameForm key={user.name ?? ""} user={user} />
       </section>
-      <AccountDetails user={user} onChangeEmail={() => setAddEmailOpen(true)} />
-      <AddEmailDialog
-        open={addEmailOpen}
-        onOpenChange={setAddEmailOpen}
-        initialEmail={emailIsSynthetic ? "" : (user.email ?? "")}
-        mode={emailIsSynthetic ? "add" : "change"}
-      />
+      <AccountDetails user={user} onAddEmail={() => setAddEmailOpen(true)} />
+      <AddEmailDialog open={addEmailOpen} onOpenChange={setAddEmailOpen} />
     </>
   );
 }
@@ -160,7 +155,7 @@ function DisplayNameForm({ user }: { user: ProfileUser }) {
   );
 }
 
-function AccountDetails({ user, onChangeEmail }: { user: ProfileUser; onChangeEmail: () => void }) {
+function AccountDetails({ user, onAddEmail }: { user: ProfileUser; onAddEmail: () => void }) {
   const copyId = async () => {
     try {
       await navigator.clipboard.writeText(user.id);
@@ -179,7 +174,7 @@ function AccountDetails({ user, onChangeEmail }: { user: ProfileUser; onChangeEm
           <Button
             variant="link"
             size="xs"
-            onClick={onChangeEmail}
+            onClick={onAddEmail}
             data-testid="settings.account-add-email"
           >
             Add
@@ -189,14 +184,6 @@ function AccountDetails({ user, onChangeEmail }: { user: ProfileUser; onChangeEm
     ) : (
       <span className="inline-flex max-w-full items-center gap-2">
         <span className="min-w-0 truncate">{user.email}</span>
-        <Button
-          variant="link"
-          size="xs"
-          onClick={onChangeEmail}
-          data-testid="settings.account-change-email"
-        >
-          Change
-        </Button>
       </span>
     );
 

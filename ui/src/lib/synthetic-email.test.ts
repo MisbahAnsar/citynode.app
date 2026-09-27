@@ -26,9 +26,7 @@ describe("isSyntheticEmail", () => {
   it("treats real user-supplied emails as non-synthetic", () => {
     expect(isSyntheticEmail("elliot@citynode.app")).toBe(false);
     expect(isSyntheticEmail("someone@example.com")).toBe(false);
-    // Not a synthetic pattern despite passkey-like prefix
     expect(isSyntheticEmail("passkey-team@example.com")).toBe(false);
-    // Not exactly 8 hex chars
     expect(isSyntheticEmail("passkey-abc@example.com")).toBe(false);
   });
 });

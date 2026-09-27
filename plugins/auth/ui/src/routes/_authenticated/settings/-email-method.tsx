@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/item";
 import { MethodHeader } from "./-method-header";
 
-export function EmailMethod({ email, onManage }: { email: string | null; onManage: () => void }) {
+export function EmailMethod({ email, onAdd }: { email: string | null; onAdd: () => void }) {
   const hasEmail = !!email;
   return (
     <section className="flex flex-col gap-4" data-testid="settings.email">
@@ -28,21 +28,11 @@ export function EmailMethod({ email, onManage }: { email: string | null; onManag
         </ItemContent>
         <ItemActions className="w-full sm:w-auto">
           {hasEmail ? (
-            <>
-              <Badge variant="secondary">Linked</Badge>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onManage}
-                data-testid="settings.email-change-button"
-              >
-                Change
-              </Button>
-            </>
+            <Badge variant="secondary">Linked</Badge>
           ) : (
             <Button
               className="w-full sm:w-auto"
-              onClick={onManage}
+              onClick={onAdd}
               data-testid="settings.email-add-button"
             >
               Add email

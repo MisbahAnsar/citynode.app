@@ -10,6 +10,7 @@ import {
   useAuthClient,
 } from "@/app";
 import { AddEmailDialog, PageContainer, PageHeader, SectionHeader, Skeleton } from "@/components";
+import { consumeAddEmailPromptPending } from "@/lib/add-email-prompt";
 import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
 import { pageTitle } from "@/lib/page-title";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
@@ -17,7 +18,7 @@ import { isSyntheticEmail } from "@/lib/synthetic-email";
 import { useNearAccount } from "@/lib/use-near-account";
 import { IdentityCard } from "./-identity-card";
 import { type HomeInvitation, InvitationSteps } from "./-invitation-steps";
-import { getNextSteps, type NextStepId } from "./-next-steps";
+import { getNextSteps } from "./-next-steps";
 import { NextStepsList } from "./-next-steps-list";
 import { RestrictedAreaNotice } from "./-restricted-area-notice";
 
@@ -104,20 +105,10 @@ function Home() {
   });
 
   const [addEmailOpen, setAddEmailOpen] = useState(false);
-  const handleStepSelect = (id: NextStepId) => {
-    if (id === "add-email") setAddEmailOpen(true);
-  };
 
   useEffect(() => {
     if (loading || !user || user.isAnonymous || hasRealEmail) return;
-    let pending: string | null = null;
-    try {
-      pending = sessionStorage.getItem("addEmailPromptPending");
-    } catch {}
-    if (pending !== "1") return;
-    try {
-      sessionStorage.removeItem("addEmailPromptPending");
-    } catch {}
+    if (!consumeAddEmailPromptPending()) return;
     toast.info("Add your email so you can sign in from another device.", {
       duration: Infinity,
       action: {
@@ -158,7 +149,7 @@ function Home() {
                 steps={steps}
                 tenantId={community?.tenantId ?? null}
                 primary={pending.length === 0}
-                onSelect={handleStepSelect}
+                onAddEmail={() => setAddEmailOpen(true)}
               />
             )}
           </section>

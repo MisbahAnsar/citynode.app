@@ -61,6 +61,7 @@ import {
   normalizeNearAccountId,
 } from "./near-invitations";
 import { createOrganizationMembershipPolicy } from "./organization-membership-policy";
+import { setEmail } from "./set-email";
 
 export function isRecipientsConfig(config: SIWNPluginOptions): config is SIWNPluginOptions & {
   recipients: { mainnet: string; testnet: string };
@@ -339,6 +340,7 @@ export function createAuthInstance(
         },
       }),
       passkeySignUp({ network }),
+      setEmail(),
       organization({
         ac: orgAc,
         roles: orgRoles,
@@ -479,22 +481,6 @@ export function createAuthInstance(
         );
       },
     },
-    emailVerification: {
-      sendVerificationEmail: async ({ user, url }) => {
-        await sendEmail(
-          {
-            to: user.email,
-            subject: "Verify your email address",
-            text: `Click the link to verify your email: ${url}`,
-          },
-          emailApiKey,
-          emailConfig?.from,
-        );
-      },
-      sendOnSignUp: true,
-      sendOnSignIn: true,
-      autoSignInAfterVerification: true,
-    },
     databaseHooks: {
       user: {
         create: {
@@ -505,12 +491,6 @@ export function createAuthInstance(
             }
           },
         },
-      },
-    },
-    user: {
-      changeEmail: {
-        enabled: true,
-        updateEmailWithoutVerification: true,
       },
     },
     account: {

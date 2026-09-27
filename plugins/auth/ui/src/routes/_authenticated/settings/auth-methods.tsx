@@ -38,15 +38,10 @@ function AuthMethodsSettings() {
       {showEmailMethod && (
         <EmailMethod
           email={emailIsSynthetic ? null : (user.email ?? null)}
-          onManage={() => setAddEmailOpen(true)}
+          onAdd={() => setAddEmailOpen(true)}
         />
       )}
-      <AddEmailDialog
-        open={addEmailOpen}
-        onOpenChange={setAddEmailOpen}
-        initialEmail={emailIsSynthetic ? "" : (user.email ?? "")}
-        mode={emailIsSynthetic ? "add" : "change"}
-      />
+      <AddEmailDialog open={addEmailOpen} onOpenChange={setAddEmailOpen} />
     </div>
   );
 }

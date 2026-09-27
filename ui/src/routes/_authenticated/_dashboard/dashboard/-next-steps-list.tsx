@@ -13,7 +13,6 @@ import {
   UsersThreeIcon,
 } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
-import type { ReactElement } from "react";
 import { pluginPath } from "@/app";
 import { Button } from "@/components";
 import {
@@ -40,12 +39,16 @@ const STEP_ICONS: Record<NextStepId, Icon> = {
   explore: CompassIcon,
 };
 
-function stepLink(step: NextStep, tenantId: string | null): ReactElement | null {
+interface StepProps {
+  step: NextStep;
+  tenantId: string | null;
+  onAddEmail?: () => void;
+}
+
+function stepLink(step: NextStep, tenantId: string | null) {
   switch (step.id) {
     case "save-account":
       return <Link to={pluginPath("/settings/auth-methods")} />;
-    case "add-email":
-      return null;
     case "create-org":
       return <Link to="/orgs/new" />;
     case "choose-org":
@@ -65,17 +68,24 @@ function stepLink(step: NextStep, tenantId: string | null): ReactElement | null 
   }
 }
 
-function FeaturedStep({
-  step,
-  tenantId,
-  onSelect,
-}: {
-  step: NextStep;
-  tenantId: string | null;
-  onSelect?: (id: NextStepId) => void;
-}) {
+function stepAction(step: NextStep, onAddEmail: (() => void) | undefined) {
+  if (step.id === "add-email" && onAddEmail) {
+    return (
+      <Button
+        className="w-full sm:w-auto"
+        onClick={onAddEmail}
+        data-testid="home-step-add-email-cta"
+      >
+        {step.actionLabel}
+      </Button>
+    );
+  }
+  return null;
+}
+
+function FeaturedStep({ step, tenantId, onAddEmail }: StepProps) {
   const StepIcon = STEP_ICONS[step.id];
-  const render = stepLink(step, tenantId);
+  const action = stepAction(step, onAddEmail);
   return (
     <Item variant="muted" data-testid={`home-step-${step.id}`}>
       <ItemMedia variant="icon">
@@ -86,12 +96,12 @@ function FeaturedStep({
         <ItemDescription>{step.description}</ItemDescription>
       </ItemContent>
       <ItemActions className="w-full sm:w-auto">
-        {render ? (
-          <Button className="w-full sm:w-auto" nativeButton={false} render={render}>
-            {step.actionLabel}
-          </Button>
-        ) : (
-          <Button className="w-full sm:w-auto" onClick={() => onSelect?.(step.id)}>
+        {action ?? (
+          <Button
+            className="w-full sm:w-auto"
+            nativeButton={false}
+            render={stepLink(step, tenantId)}
+          >
             {step.actionLabel}
           </Button>
         )}
@@ -100,19 +110,25 @@ function FeaturedStep({
   );
 }
 
-function StepRow({
-  step,
-  tenantId,
-  onSelect,
-}: {
-  step: NextStep;
-  tenantId: string | null;
-  onSelect?: (id: NextStepId) => void;
-}) {
+function StepRow({ step, tenantId, onAddEmail }: StepProps) {
   const StepIcon = STEP_ICONS[step.id];
-  const render = stepLink(step, tenantId);
-  const shared = (
-    <>
+  const action = stepAction(step, onAddEmail);
+  if (action) {
+    return (
+      <Item variant="outline" data-testid={`home-step-${step.id}`}>
+        <ItemMedia variant="icon">
+          <StepIcon />
+        </ItemMedia>
+        <ItemContent className="min-w-0">
+          <ItemTitle>{step.title}</ItemTitle>
+          <ItemDescription>{step.description}</ItemDescription>
+        </ItemContent>
+        <ItemActions className="w-full sm:w-auto">{action}</ItemActions>
+      </Item>
+    );
+  }
+  return (
+    <Item variant="outline" render={stepLink(step, tenantId)} data-testid={`home-step-${step.id}`}>
       <ItemMedia variant="icon">
         <StepIcon />
       </ItemMedia>
@@ -123,22 +139,6 @@ function StepRow({
       <ItemActions>
         <CaretRightIcon className="size-4 text-muted-foreground" />
       </ItemActions>
-    </>
-  );
-  if (render) {
-    return (
-      <Item variant="outline" render={render} data-testid={`home-step-${step.id}`}>
-        {shared}
-      </Item>
-    );
-  }
-  return (
-    <Item
-      variant="outline"
-      render={<button type="button" onClick={() => onSelect?.(step.id)} />}
-      data-testid={`home-step-${step.id}`}
-    >
-      {shared}
     </Item>
   );
 }
@@ -147,21 +147,21 @@ export function NextStepsList({
   steps,
   tenantId,
   primary,
-  onSelect,
+  onAddEmail,
 }: {
   steps: NextStep[];
   tenantId: string | null;
   primary: boolean;
-  onSelect?: (id: NextStepId) => void;
+  onAddEmail?: () => void;
 }) {
   const [first, ...rest] = steps;
   const featured = primary && first ? first : null;
   const rows = featured ? rest : steps;
   return (
     <ItemGroup data-testid="home-next-steps">
-      {featured && <FeaturedStep step={featured} tenantId={tenantId} onSelect={onSelect} />}
+      {featured && <FeaturedStep step={featured} tenantId={tenantId} onAddEmail={onAddEmail} />}
       {rows.map((step) => (
-        <StepRow key={step.id} step={step} tenantId={tenantId} onSelect={onSelect} />
+        <StepRow key={step.id} step={step} tenantId={tenantId} onAddEmail={onAddEmail} />
       ))}
     </ItemGroup>
   );
