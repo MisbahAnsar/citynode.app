@@ -1,6 +1,6 @@
 import type { ContractedRouter } from "@orpc/server";
 import { ORPCError } from "@orpc/server";
-import { Context, Effect, Layer } from "effect";
+import { Cause, Context, Effect, Exit, Layer } from "effect";
 import { buildScopedContext, createPlugin } from "every-plugin";
 import { createAuthMiddleware } from "everything-dev/api";
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
@@ -1157,16 +1157,50 @@ export default createPlugin.withPlugins<PluginsClient>()({
           );
         }
 
-        const integrity: Record<string, string> = {};
-        for (const file of decoded) {
-          yield* services.storage.put({
-            key: buildBundleKey(input.account, input.gateway, input.workspace, file.objectPath),
-            bytes: file.bytes,
-            contentType: bundleContentType(file.name),
-            cacheControl: bundleCacheControl(file.name),
-          });
-          integrity[file.objectPath] = computeObjectIntegrity(file.bytes);
-        }
+        // Bounded pool: 736 sequential PUTs are minutes of pure round-trip
+        // latency; 4-way concurrency cuts wall time ~4x with no extra memory
+        // (all file bytes are already decoded in memory).
+        const integrityEntries = yield* Effect.forEach(
+          decoded,
+          (file) =>
+            Effect.gen(function* () {
+              // Exit + squash: the storage layer's put is typed never-error
+              // (Effect.promise rejections are defects) — this catches both
+              // defects and typed failures so the cause reaches the client
+              // as a CONNECTION_ERROR instead of a bare INTERNAL_SERVER_ERROR.
+              const put = yield* Effect.exit(
+                services.storage.put({
+                  key: buildBundleKey(
+                    input.account,
+                    input.gateway,
+                    input.workspace,
+                    file.objectPath,
+                  ),
+                  bytes: file.bytes,
+                  contentType: bundleContentType(file.name),
+                  cacheControl: bundleCacheControl(file.name),
+                }),
+              );
+              if (Exit.isFailure(put)) {
+                const cause = Cause.squash(put.cause);
+                return yield* Effect.fail(
+                  errors.CONNECTION_ERROR({
+                    message: `Bundle storage failed for ${file.objectPath}: ${
+                      cause instanceof Error ? cause.message : String(cause)
+                    }`,
+                    data: {
+                      errorCode: "STORAGE_PUT_FAILED",
+                      suggestion:
+                        "Check BOS_STORAGE_* (R2/MinIO) credentials and reachability on the API host",
+                    },
+                  }),
+                );
+              }
+              return [file.objectPath, computeObjectIntegrity(file.bytes)] as const;
+            }),
+          { concurrency: 4 },
+        );
+        const integrity = Object.fromEntries(integrityEntries);
 
         return { stored: decoded.length, totalBytes, integrity };
       }),

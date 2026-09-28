@@ -26,6 +26,7 @@ import {
 import { pageTitle } from "@/lib/page-title";
 import { allNodesQueryOptions } from "@/lib/queries/nodes";
 import { tenantsQueryOptions } from "@/lib/queries/tenants";
+import { isSyntheticEmail } from "@/lib/synthetic-email";
 import { useNearAccount } from "@/lib/use-near-account";
 import { useRelayerInfoQuery } from "@/lib/use-relayer";
 import { formatNearFigure, ListSkeleton, StatFigure, StatGrid } from "./-admin-ui";
@@ -236,7 +237,10 @@ function AdminOverview() {
           {tenant?.createdAt && (
             <ContextRow label="Created" value={<LocalDate value={tenant.createdAt} />} />
           )}
-          <ContextRow label="Name" value={user?.name || user?.email || "—"} />
+          <ContextRow
+            label="Name"
+            value={user?.name || (isSyntheticEmail(user?.email) ? null : user?.email) || "—"}
+          />
           <ContextRow label="Role" value={user?.role ?? "—"} />
           <ContextRow
             label="Wallet"

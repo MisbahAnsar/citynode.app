@@ -226,6 +226,9 @@ export interface DeployResultEntry {
   integrity?: string;
   urlField: string;
   integrityField?: string;
+  /** A plain pipeline-state value (e.g. the built MF container name). */
+  value?: string;
+  valueField?: string;
 }
 
 function setNestedPath(obj: Record<string, unknown>, dottedPath: string, value: unknown): void {
@@ -265,6 +268,9 @@ export function applyDeployResults(
       } else {
         deleteNestedPath(merged, result.integrityField);
       }
+    }
+    if (result.valueField && result.value !== undefined && result.value !== null) {
+      setNestedPath(merged, result.valueField, result.value);
     }
   }
   return merged;

@@ -18,10 +18,10 @@ concurrency:
 
 permissions:
   contents: read
-  packages: write
+  # packages: write  # re-enable when returning to GHCR image push (ADR 0021)
 
-env:
-  IMAGE: ghcr.io/nearbuilders/everything-dev
+# env:
+#   IMAGE: ghcr.io/nearbuilders/everything-dev
 
 jobs:
   deploy:
@@ -57,48 +57,43 @@ jobs:
       - name: Build better-near-auth
         run: bun run --cwd packages/better-near-auth build
 
-      - name: Publish with deploy
-        timeout-minutes: 20
-        # ADR 0020 CDN deploy: dists upload to the storage API and every
-        # bundle URL points at cdn.everything.dev. The API key is
-        # account-pinned server-side — mint it from the platform account's
-        # session (Settings → API Keys) so the root's own namespace passes
-        # pinning. Unset secret → the publish fails fast with the
-        # credential error instead of silently shipping gateway URLs.
-        env:
-          BOS_BUNDLE_CDN_ORIGIN: https://cdn.everything.dev
-          BOS_STORAGE_API_KEY: ${{ secrets.BOS_STORAGE_API_KEY }}
-        run: bun run bos publish --deploy --packages local${{ inputs.verbose == true && ' --verbose' || '' }}
+      # - name: Publish with deploy
+      #   timeout-minutes: 20
+      #   # NOTE: publish runs locally for now; re-enable this step once
+      #   # BOS_STORAGE_API_KEY is set in repo secrets (ADR 0020 CDN deploy).
+      #   # env:
+      #   #   BOS_BUNDLE_CDN_ORIGIN: https://cdn.everything.dev
+      #   #   BOS_STORAGE_API_KEY: ${{ secrets.BOS_STORAGE_API_KEY }}
+      #   run: bun run bos publish --deploy --packages local${{ inputs.verbose == true && ' --verbose' || '' }}
 
-      - name: Log in to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      # - name: Log in to GHCR
+      #   run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Build and push the universal runtime image
-        timeout-minutes: 45
-        # ADR 0021: the image IS the deployment artifact — the `runtime`
-        # stage (default target) stages the boot namespace and boots
-        # `bos start`. Pushed by SHA tag so deploys pin the validated bytes.
-        run: |
-          IMAGE_TAG=sha-$(echo "${{ github.event.workflow_run.head_sha || github.sha }}" | cut -c1-7)
-          echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_ENV"
-          docker build --target runtime -t "${IMAGE}:${IMAGE_TAG}" -t "${IMAGE}:latest" .
-          docker push "${IMAGE}:${IMAGE_TAG}" | tee /tmp/push.log
-          docker push "${IMAGE}:latest"
-          # Pin the deploy to the pushed digest, not the mutable tag.
-          DIGEST=$(grep -o 'sha256:[a-f0-9]*' /tmp/push.log | tail -1)
-          echo "IMAGE_DIGEST=${DIGEST}" >> "$GITHUB_ENV"
+      # - name: Build and push the universal runtime image
+      #   timeout-minutes: 45
+      #   # ADR 0021: the image IS the deployment artifact — the `runtime`
+      #   # stage (default target) stages the boot namespace and boots
+      #   # `bos start`. Pushed by SHA tag so deploys pin the validated bytes.
+      #   run: |
+      #     IMAGE_TAG=sha-$(echo "${{ github.event.workflow_run.head_sha || github.sha }}" | cut -c1-7)
+      #     echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_ENV"
+      #     docker build --target runtime -t "${IMAGE}:${IMAGE_TAG}" -t "${IMAGE}:latest" .
+      #     docker push "${IMAGE}:${IMAGE_TAG}" | tee /tmp/push.log
+      #     docker push "${IMAGE}:latest"
+      #     # Pin the deploy to the pushed digest, not the mutable tag.
+      #     DIGEST=$(grep -o 'sha256:[a-f0-9]*' /tmp/push.log | tail -1)
+      #     echo "IMAGE_DIGEST=${DIGEST}" >> "$GITHUB_ENV"
 
       - name: Install Railway CLI
         run: npm i -g @railway/cli@5.47.1
 
-      - name: Deploy the pushed image to Railway
-        timeout-minutes: 30
-        # Pull-only deploy: a thin FROM referencing the pushed digest —
-        # Railway builds (pulls) it instead of rebuilding the workspace
-        # dists. The digest is exactly what this pipeline just validated.
-        run: |
-          echo "FROM ${IMAGE}@${IMAGE_DIGEST}" > Dockerfile.railway
-          RAILWAY_DOCKERFILE_PATH=Dockerfile.railway railway up --service app --ci --verbose
+      - name: Build and deploy Railway image
+        timeout-minutes: 45
+        # railway up builds the committed Dockerfile (multi-stage: all
+        # workspace dists stage into the image) and deploys — the image IS
+        # the deployment artifact. railway redeploy would re-run the previous
+        # build and never ship the new artifacts.
+        run: railway up --service app --ci --verbose
 
       - name: Verify release-train identity (mf check)
         timeout-minutes: 5

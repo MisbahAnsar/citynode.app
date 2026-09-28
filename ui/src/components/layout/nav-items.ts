@@ -5,6 +5,7 @@ import {
   CoinsIcon,
   CompassIcon,
   CubeIcon,
+  HammerIcon,
   HouseIcon,
   LightningIcon,
   ListChecksIcon,
@@ -128,6 +129,14 @@ export function buildNavItems(context: NavContext = {}): SidebarItem[] {
       to: "/stake",
       roleRequired: "anon",
       area: "stake",
+      section: "main",
+    },
+    {
+      icon: HammerIcon,
+      label: "Build",
+      slug: "build",
+      to: "/build",
+      roleRequired: "anon",
       section: "main",
     },
     {

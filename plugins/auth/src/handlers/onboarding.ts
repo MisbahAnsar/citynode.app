@@ -10,7 +10,7 @@ import {
 import { AuthServicesTag, type PluginServices } from "../service-types";
 import { createHeaders, getActiveOrganizationId, parseTeamAreas, safeAuthApi } from "../utils";
 
-const DEFAULT_MAX_USES = 50;
+const DEFAULT_MAX_USES = 300;
 const DEFAULT_EXPIRES_IN_HOURS = 24;
 const EVENTS_AREA = "events";
 
@@ -395,6 +395,10 @@ export function createOnboardingHandlers(builder: any, requireAuth: any) {
           ),
         });
         if (already) {
+          await services.db
+            .update(schema.session)
+            .set({ activeOrganizationId: codeRow.organizationId })
+            .where(eq(schema.session.id, sessionData.session.id));
           return {
             success: true,
             alreadyRedeemed: true,

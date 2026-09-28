@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
   type Passkey,
   type SessionData,
@@ -7,10 +9,12 @@ import {
   useApiClient,
   useAuthClient,
 } from "@/app";
-import { PageContainer, PageHeader, SectionHeader, Skeleton } from "@/components";
+import { AddEmailDialog, PageContainer, PageHeader, SectionHeader, Skeleton } from "@/components";
+import { consumeAddEmailPromptPending } from "@/lib/add-email-prompt";
 import { type FeatureArea, isFeatureArea } from "@/lib/feature-areas";
 import { pageTitle } from "@/lib/page-title";
 import { tenantByOrgQueryOptions } from "@/lib/queries/tenants";
+import { isSyntheticEmail } from "@/lib/synthetic-email";
 import { useNearAccount } from "@/lib/use-near-account";
 import { IdentityCard } from "./-identity-card";
 import { type HomeInvitation, InvitationSteps } from "./-invitation-steps";
@@ -87,16 +91,32 @@ function Home() {
   const loading =
     !user || organizations.isPending || (!!activeOrgId && tenant.isPending) || passkeys.isPending;
 
+  const hasRealEmail = !isSyntheticEmail(user?.email);
   const steps = getNextSteps({
     isAnonymous: user?.isAnonymous ?? false,
     hasPasskey: (passkeys.data?.length ?? 0) > 0,
     hasNear: !!nearAccountId,
+    hasRealEmail,
     organizationCount: orgs.length,
     activeOrganizationName: activeOrg?.name ?? null,
     community,
     canManageCommunity: isAdmin || orgRole === "owner" || orgRole === "admin",
     isAdmin,
   });
+
+  const [addEmailOpen, setAddEmailOpen] = useState(false);
+
+  useEffect(() => {
+    if (loading || !user || user.isAnonymous || hasRealEmail) return;
+    if (!consumeAddEmailPromptPending()) return;
+    toast.info("Add your email so you can sign in from another device.", {
+      duration: Infinity,
+      action: {
+        label: "Add email",
+        onClick: () => setAddEmailOpen(true),
+      },
+    });
+  }, [loading, user, hasRealEmail]);
 
   const firstName = user?.isAnonymous ? null : user?.name?.split(" ")[0];
 
@@ -129,6 +149,7 @@ function Home() {
                 steps={steps}
                 tenantId={community?.tenantId ?? null}
                 primary={pending.length === 0}
+                onAddEmail={() => setAddEmailOpen(true)}
               />
             )}
           </section>
@@ -139,12 +160,14 @@ function Home() {
               user={user}
               nearAccountId={nearAccountId}
               passkeyCount={passkeys.data?.length ?? 0}
+              onAddEmail={() => setAddEmailOpen(true)}
             />
           ) : (
             <Skeleton className="h-56 w-full rounded-2xl" />
           )}
         </aside>
       </div>
+      <AddEmailDialog open={addEmailOpen} onOpenChange={setAddEmailOpen} />
     </PageContainer>
   );
 }
