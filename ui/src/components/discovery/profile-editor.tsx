@@ -25,6 +25,29 @@ import { ActivityEditor } from "./activity-editor";
 type Profile = NonNullable<Awaited<ReturnType<ApiClient["getDiscoveryProfile"]>>>;
 export type ProfileEditorTab = "profile" | "events";
 
+function profileSaveErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    const message = String((error as { message: unknown }).message).trim();
+    if (message) return message;
+  }
+  return "Couldn't save the profile.";
+}
+
+function validateProfile(profile: Profile) {
+  if ((profile.latitude === null) !== (profile.longitude === null)) {
+    return "Provide both coordinates or neither";
+  }
+  if (profile.latitude !== null && profile.location.trim().length === 0) {
+    return "Confirm the location label";
+  }
+  for (const channel of profile.channels) {
+    if (!channel.label.trim()) return "Each link needs a name";
+    if (!/^https?:\/\//i.test(channel.url.trim())) return "Use an HTTP(S) URL for each link";
+  }
+  return null;
+}
+
 export function ProfileEditor({
   nodeId,
   defaultTab = "profile",
@@ -116,17 +139,19 @@ export function ProfileEditor({
 
 function ProfileForm({ initial }: { initial: Profile }) {
   const [profile, setProfile] = useState(initial);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const api = useApiClient();
   const client = useQueryClient();
   const save = useMutation({
     mutationFn: () => api.saveDiscoveryProfile(profile),
     onSuccess: () => {
+      setValidationError(null);
       toast.success(profile.published ? "Profile saved and live on Explore" : "Profile saved");
       return client.invalidateQueries({
         predicate: (q) => String(q.queryKey[0]).startsWith("discovery"),
       });
     },
-    onError: (error: Error) => toast.error(error.message || "Couldn't save the profile."),
+    onError: (error: unknown) => toast.error(profileSaveErrorMessage(error)),
   });
   const setChannel = (index: number, patch: Partial<Profile["channels"][number]>) =>
     setProfile({
@@ -136,8 +161,17 @@ function ProfileForm({ initial }: { initial: Profile }) {
   return (
     <form
       className="flex max-w-2xl flex-col gap-10"
+      noValidate
+      data-testid="discovery-profile-form"
       onSubmit={(e) => {
         e.preventDefault();
+        const issue = validateProfile(profile);
+        if (issue) {
+          setValidationError(issue);
+          toast.error(issue);
+          return;
+        }
+        setValidationError(null);
         save.mutate();
       }}
     >
@@ -148,8 +182,9 @@ function ProfileForm({ initial }: { initial: Profile }) {
         </FieldContent>
         <Switch
           id="profile-published"
+          data-testid="discovery-profile-published"
           checked={profile.published}
-          onCheckedChange={(checked) => setProfile({ ...profile, published: checked })}
+          onCheckedChange={(checked) => setProfile({ ...profile, published: checked === true })}
         />
       </Field>
 
@@ -159,6 +194,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
           <FieldLabel htmlFor="profile-summary">Description</FieldLabel>
           <Textarea
             id="profile-summary"
+            data-testid="discovery-profile-summary"
             value={profile.summary}
             placeholder="Who is this community for? What do you do together?"
             maxLength={1000}
@@ -175,6 +211,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
               <FieldLabel htmlFor="profile-location">City or venue</FieldLabel>
               <Input
                 id="profile-location"
+                data-testid="discovery-profile-location"
                 value={profile.location}
                 maxLength={120}
                 onChange={(e) => setProfile({ ...profile, location: e.target.value })}
@@ -184,6 +221,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
               <FieldLabel htmlFor="profile-region">Region</FieldLabel>
               <Input
                 id="profile-region"
+                data-testid="discovery-profile-region"
                 value={profile.region}
                 maxLength={120}
                 onChange={(e) => setProfile({ ...profile, region: e.target.value })}
@@ -193,6 +231,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
               <FieldLabel htmlFor="profile-latitude">Latitude</FieldLabel>
               <Input
                 id="profile-latitude"
+                data-testid="discovery-profile-latitude"
                 type="number"
                 step="any"
                 min={-85}
@@ -210,6 +249,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
               <FieldLabel htmlFor="profile-longitude">Longitude</FieldLabel>
               <Input
                 id="profile-longitude"
+                data-testid="discovery-profile-longitude"
                 type="number"
                 step="any"
                 min={-180}
@@ -239,7 +279,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
                 <FieldLabel htmlFor={`channel-label-${index}`}>Name</FieldLabel>
                 <Input
                   id={`channel-label-${index}`}
-                  required
+                  data-testid={`discovery-profile-channel-label-${index}`}
                   placeholder="Telegram"
                   value={channel.label}
                   onChange={(e) => setChannel(index, { label: e.target.value })}
@@ -249,7 +289,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
                 <FieldLabel htmlFor={`channel-url-${index}`}>Link</FieldLabel>
                 <Input
                   id={`channel-url-${index}`}
-                  required
+                  data-testid={`discovery-profile-channel-url-${index}`}
                   type="url"
                   placeholder="https://"
                   value={channel.url}
@@ -277,6 +317,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
             variant="outline"
             size="sm"
             className="self-start"
+            data-testid="discovery-profile-add-channel"
             disabled={profile.channels.length >= 10}
             onClick={() =>
               setProfile({ ...profile, channels: [...profile.channels, { label: "", url: "" }] })
@@ -290,15 +331,20 @@ function ProfileForm({ initial }: { initial: Profile }) {
 
       <div className="flex flex-col gap-2">
         <Button
+          type="submit"
           data-testid="discovery-profile-save"
           className="self-start"
           disabled={save.isPending}
         >
           {save.isPending ? "Saving…" : "Save profile"}
         </Button>
-        {save.isError && (
-          <p role="alert" className="text-sm text-destructive">
-            {save.error.message}
+        {(validationError || save.isError) && (
+          <p
+            role="alert"
+            data-testid="discovery-profile-save-error"
+            className="text-sm text-destructive"
+          >
+            {validationError ?? profileSaveErrorMessage(save.error)}
           </p>
         )}
       </div>
