@@ -3,8 +3,6 @@ import { collectErrors, expectNoHydrationFailure, waitForApp } from "../helpers/
 import { injectCookies, seedDiscoveryNode } from "../helpers/seeded";
 
 test.describe("discovery profile save → Explore", () => {
-  test.use({ trace: "on" });
-
   test("saving with Show on Explore publishes the community to list and map", async ({ page }) => {
     const pageErrors = collectErrors(page);
     const node = await seedDiscoveryNode({
