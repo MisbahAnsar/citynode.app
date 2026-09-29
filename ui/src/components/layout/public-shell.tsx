@@ -1,5 +1,7 @@
 import { ClientOnly, Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { useAppTranslation } from "@/i18n/runtime";
+import { LanguageSelector } from "./language-selector";
 import { NearBranding } from "./near-branding";
 import { NetworkToggle } from "./network-toggle";
 import { PublicHeader } from "./public-header";
@@ -29,18 +31,19 @@ export function PublicShell({
 }
 
 export function PublicShellFooter() {
+  const t = useAppTranslation();
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-8">
       <nav
-        aria-label="Footer"
+        aria-label={t("footer.navigation")}
         data-testid="public-footer"
         className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground"
       >
         <Link to="/about" className="hover:text-foreground">
-          About
+          {t("footer.about")}
         </Link>
         <Link to="/skill" className="hover:text-foreground">
-          Skill
+          {t("footer.skill")}
         </Link>
         <a
           href="https://nearbuilders.org"
@@ -50,12 +53,17 @@ export function PublicShellFooter() {
         >
           nearbuilders.org
         </a>
+        <ClientOnly>
+          <LanguageSelector />
+        </ClientOnly>
       </nav>
-      <div className="flex items-center gap-6">
+      <div className="flex flex-wrap items-center gap-3">
         <ClientOnly>
           <NetworkToggle />
         </ClientOnly>
-        <NearBranding />
+        <div className="ml-3">
+          <NearBranding />
+        </div>
       </div>
     </div>
   );
