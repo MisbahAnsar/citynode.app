@@ -658,6 +658,11 @@ export const initializePlugins = Effect.gen(function* () {
     let baseVariables: Record<string, unknown> | undefined;
     if (node.kind === "auth") {
       baseVariables = yield* buildAuthBaseVariables(config, corsOrigins);
+    } else if (node.kind === "api") {
+      baseVariables = {
+        domain: config.domain ?? "localhost",
+        repository: config.repository ?? "",
+      };
     }
 
     yield* Effect.logInfo(`[Plugins][${key}] Loading (${entry.config.name})`);

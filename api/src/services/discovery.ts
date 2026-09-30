@@ -22,7 +22,7 @@ import type {
 } from "../discovery-contract";
 import type { AuthPluginContext as AuthContext } from "../lib/auth-types.gen";
 import { toOrpcError } from "../lib/errors";
-import { geocodeLocation, shouldGeocodeProfile } from "./discovery-geocode";
+import { type GeocodeService, GeocodeTag, shouldGeocodeProfile } from "./discovery-geocode";
 import { createLumaCalendars } from "./discovery-luma";
 import { nodeKindOf } from "./nodes";
 
@@ -32,13 +32,13 @@ function canonicalActivityUrl(value: string) {
   const url = new URL(value);
   url.hash = "";
   if (["lu.ma", "www.lu.ma", "www.luma.com"].includes(url.hostname)) url.hostname = "luma.com";
-  for (const key of [...url.searchParams.keys()])
+  for (const key of url.searchParams.keys())
     if (key.startsWith("utm_") || key === "fbclid") url.searchParams.delete(key);
   url.searchParams.sort();
   return url.toString();
 }
 
-function createDiscovery(db: Database, lumaKeys: string) {
+function createDiscovery(db: Database, lumaKeys: string, geocode: GeocodeService) {
   const luma = createLumaCalendars(lumaKeys);
 
   const query = <T>(run: () => Promise<T>): DiscoveryEffect<T> =>
@@ -918,7 +918,15 @@ function createDiscovery(db: Database, lumaKeys: string) {
           geocodedLocation,
           geocodeHint: null,
         };
-        if (
+        if (!next.location.trim()) {
+          next = {
+            ...next,
+            latitude: null,
+            longitude: null,
+            geocodedLocation: null,
+            geocodeHint: null,
+          };
+        } else if (
           shouldGeocodeProfile({
             location: next.location,
             latitude: next.latitude,
@@ -926,7 +934,7 @@ function createDiscovery(db: Database, lumaKeys: string) {
             geocodedLocation,
           })
         ) {
-          const geocoded = yield* Effect.promise(() => geocodeLocation(next.location));
+          const geocoded = yield* geocode.geocode(next.location);
           if (geocoded.ok) {
             next = {
               ...next,
@@ -943,7 +951,7 @@ function createDiscovery(db: Database, lumaKeys: string) {
               geocodedLocation: null,
               geocodeHint:
                 geocoded.reason === "not_found"
-                  ? "Couldn't place that location on the map. You can enter coordinates manually."
+                  ? "Couldn't place that location on the map. Try a clearer city or venue name."
                   : "Map lookup is unavailable right now. Your profile was saved without a pin.",
             };
           }
@@ -974,7 +982,7 @@ export const DiscoveryLive = (lumaKeys = "") =>
   Layer.effect(
     DiscoveryTag,
     Effect.gen(function* () {
-      const service = createDiscovery(yield* DatabaseTag, lumaKeys);
+      const service = createDiscovery(yield* DatabaseTag, lumaKeys, yield* GeocodeTag);
       yield* Effect.acquireRelease(
         Effect.sync(() =>
           setInterval(() => {

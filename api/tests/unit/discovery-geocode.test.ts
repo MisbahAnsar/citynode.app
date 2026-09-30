@@ -1,12 +1,21 @@
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  geocodeLocation,
-  resetGeocodeStateForTests,
+  GeocodeLive,
+  GeocodeTag,
+  nominatimUserAgent,
   shouldGeocodeProfile,
 } from "../../src/services/discovery-geocode";
 
+const identity = {
+  domain: "citynode.app",
+  repository: "https://github.com/NEARBuilders/citynode.app",
+};
+
+const runGeocode = <A>(program: Effect.Effect<A, never, GeocodeTag>) =>
+  Effect.runPromise(program.pipe(Effect.provide(GeocodeLive(identity))));
+
 afterEach(() => {
-  resetGeocodeStateForTests();
   vi.unstubAllGlobals();
 });
 
@@ -22,7 +31,7 @@ describe("shouldGeocodeProfile", () => {
     ).toBe(true);
   });
 
-  it("preserves manually entered coordinates", () => {
+  it("geocodes when coordinates exist without a matching geocoded location", () => {
     expect(
       shouldGeocodeProfile({
         location: "Karachi",
@@ -30,7 +39,7 @@ describe("shouldGeocodeProfile", () => {
         longitude: 67.01,
         geocodedLocation: null,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("re-geocodes when the location changes after a prior geocode", () => {
@@ -56,6 +65,14 @@ describe("shouldGeocodeProfile", () => {
   });
 });
 
+describe("nominatimUserAgent", () => {
+  it("uses the runtime domain and repository", () => {
+    expect(nominatimUserAgent(identity)).toBe(
+      "citynode.app/discovery-geocode (https://github.com/NEARBuilders/citynode.app; geocode)",
+    );
+  });
+});
+
 describe("geocodeLocation", () => {
   it("returns coordinates from Nominatim and caches them", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
@@ -64,14 +81,20 @@ describe("geocodeLocation", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const first = await geocodeLocation("Karachi");
-    const second = await geocodeLocation("Karachi");
+    const { first, second, userAgent } = await runGeocode(
+      Effect.gen(function* () {
+        const geocode = yield* GeocodeTag;
+        const first = yield* geocode.geocode("Karachi");
+        const second = yield* geocode.geocode("Karachi");
+        return { first, second, userAgent: nominatimUserAgent(identity) };
+      }),
+    );
 
     expect(first).toEqual({ ok: true, latitude: 24.86, longitude: 67.01 });
     expect(second).toEqual(first);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
-      "User-Agent": expect.stringContaining("citynode.app/discovery-geocode"),
+      "User-Agent": userAgent,
     });
   });
 
@@ -83,7 +106,14 @@ describe("geocodeLocation", () => {
         json: async () => [],
       }),
     );
-    expect(await geocodeLocation("nowhere-land-xyz")).toEqual({
+    expect(
+      await runGeocode(
+        Effect.gen(function* () {
+          const geocode = yield* GeocodeTag;
+          return yield* geocode.geocode("nowhere-land-xyz");
+        }),
+      ),
+    ).toEqual({
       ok: false,
       reason: "not_found",
     });
@@ -97,7 +127,14 @@ describe("geocodeLocation", () => {
         json: async () => [],
       }),
     );
-    expect(await geocodeLocation("Karachi")).toEqual({
+    expect(
+      await runGeocode(
+        Effect.gen(function* () {
+          const geocode = yield* GeocodeTag;
+          return yield* geocode.geocode("Karachi");
+        }),
+      ),
+    ).toEqual({
       ok: false,
       reason: "unavailable",
     });
@@ -111,15 +148,20 @@ describe("geocodeLocation", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const started = Date.now();
-    await geocodeLocation("Place A");
-    await geocodeLocation("Place B");
+    await runGeocode(
+      Effect.gen(function* () {
+        const geocode = yield* GeocodeTag;
+        yield* geocode.geocode("Place A");
+        yield* geocode.geocode("Place B");
+      }),
+    );
     const elapsed = Date.now() - started;
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(elapsed).toBeGreaterThanOrEqual(1100);
     for (const call of fetchMock.mock.calls) {
       expect(call[1]?.headers).toMatchObject({
-        "User-Agent": expect.stringContaining("citynode.app/discovery-geocode"),
+        "User-Agent": nominatimUserAgent(identity),
       });
     }
   });
@@ -134,18 +176,28 @@ describe("geocodeLocation", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const first = geocodeLocation("Karachi");
+    const results = runGeocode(
+      Effect.gen(function* () {
+        const geocode = yield* GeocodeTag;
+        return yield* Effect.all(
+          [geocode.geocode("Karachi"), geocode.geocode("Karachi")],
+          { concurrency: 2 },
+        );
+      }),
+    );
+
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
-    const second = geocodeLocation("Karachi");
     resolveFetch({
       ok: true,
       json: async () => [{ lat: "24.86", lon: "67.01" }],
     });
 
-    expect(await first).toEqual({ ok: true, latitude: 24.86, longitude: 67.01 });
-    expect(await second).toEqual({ ok: true, latitude: 24.86, longitude: 67.01 });
+    expect(await results).toEqual([
+      { ok: true, latitude: 24.86, longitude: 67.01 },
+      { ok: true, latitude: 24.86, longitude: 67.01 },
+    ]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

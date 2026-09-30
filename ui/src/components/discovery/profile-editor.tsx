@@ -35,12 +35,6 @@ function profileSaveErrorMessage(error: unknown) {
 }
 
 function validateProfile(profile: Profile) {
-  if ((profile.latitude === null) !== (profile.longitude === null)) {
-    return "Provide both coordinates or neither";
-  }
-  if (profile.latitude !== null && profile.location.trim().length === 0) {
-    return "Confirm the location label";
-  }
   for (const channel of profile.channels) {
     if (!channel.label.trim()) return "Each link needs a name";
     if (!/^https?:\/\//i.test(channel.url.trim())) return "Use an HTTP(S) URL for each link";
@@ -160,18 +154,30 @@ function ProfileForm({ initial }: { initial: Profile }) {
     },
     onError: (error: unknown) => toast.error(profileSaveErrorMessage(error)),
   });
-  const setCoords = (patch: { latitude?: number | null; longitude?: number | null }) =>
-    setProfile({
-      ...profile,
-      ...patch,
-      geocodedLocation: null,
-      geocodeHint: null,
-    });
   const setChannel = (index: number, patch: Partial<Profile["channels"][number]>) =>
     setProfile({
       ...profile,
       channels: profile.channels.map((c, i) => (i === index ? { ...c, ...patch } : c)),
     });
+  const setLocation = (location: string) => {
+    const trimmed = location.trim();
+    const stillMatchesGeocode =
+      trimmed.length > 0 && trimmed === (profile.geocodedLocation?.trim() ?? "");
+    setProfile({
+      ...profile,
+      location,
+      ...(trimmed
+        ? stillMatchesGeocode
+          ? {}
+          : { geocodedLocation: null, geocodeHint: null }
+        : {
+            latitude: null,
+            longitude: null,
+            geocodedLocation: null,
+            geocodeHint: null,
+          }),
+    });
+  };
   return (
     <form
       className="flex max-w-2xl flex-col gap-10"
@@ -228,7 +234,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
                 data-testid="discovery-profile-location"
                 value={profile.location}
                 maxLength={120}
-                onChange={(e) => setProfile({ ...profile, location: e.target.value })}
+                onChange={(e) => setLocation(e.target.value)}
               />
             </Field>
             <Field>
@@ -241,44 +247,9 @@ function ProfileForm({ initial }: { initial: Profile }) {
                 onChange={(e) => setProfile({ ...profile, region: e.target.value })}
               />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="profile-latitude">Latitude</FieldLabel>
-              <Input
-                id="profile-latitude"
-                data-testid="discovery-profile-latitude"
-                type="number"
-                step="any"
-                min={-85}
-                max={85}
-                value={profile.latitude ?? ""}
-                onChange={(e) =>
-                  setCoords({
-                    latitude: e.target.value === "" ? null : Number(e.target.value),
-                  })
-                }
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="profile-longitude">Longitude</FieldLabel>
-              <Input
-                id="profile-longitude"
-                data-testid="discovery-profile-longitude"
-                type="number"
-                step="any"
-                min={-180}
-                max={180}
-                value={profile.longitude ?? ""}
-                onChange={(e) =>
-                  setCoords({
-                    longitude: e.target.value === "" ? null : Number(e.target.value),
-                  })
-                }
-              />
-            </Field>
           </div>
           <FieldDescription>
-            Leave coordinates empty to place the pin from the city or venue (OpenStreetMap
-            Nominatim). Manual coordinates are kept as entered.
+            The map pin is placed from the city or venue (OpenStreetMap Nominatim).
           </FieldDescription>
           {profile.geocodeHint ? (
             <p
