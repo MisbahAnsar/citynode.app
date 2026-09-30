@@ -179,10 +179,9 @@ describe("geocodeLocation", () => {
     const results = runGeocode(
       Effect.gen(function* () {
         const geocode = yield* GeocodeTag;
-        return yield* Effect.all(
-          [geocode.geocode("Karachi"), geocode.geocode("Karachi")],
-          { concurrency: 2 },
-        );
+        return yield* Effect.all([geocode.geocode("Karachi"), geocode.geocode("Karachi")], {
+          concurrency: 2,
+        });
       }),
     );
 

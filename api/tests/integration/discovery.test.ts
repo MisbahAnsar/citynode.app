@@ -133,9 +133,7 @@ it("derives coordinates from location via Nominatim and skips when already geoco
     longitude: 67.01,
   });
   expect(fetchMock.mock.calls.some(([input]) => String(input).includes("nominatim"))).toBe(true);
-  const nominatimCall = fetchMock.mock.calls.find(([input]) =>
-    String(input).includes("nominatim"),
-  );
+  const nominatimCall = fetchMock.mock.calls.find(([input]) => String(input).includes("nominatim"));
   expect(nominatimCall?.[1]?.headers).toMatchObject({
     "User-Agent": expect.stringContaining("citynode.app/discovery-geocode"),
   });
