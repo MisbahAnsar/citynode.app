@@ -98,6 +98,59 @@ it("preserves multiple nodes per tenant and validates confirmed coordinates", as
   ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 });
 
+it("derives coordinates from location via Nominatim without overwriting manual pins", async () => {
+  const geocode = await import("@/services/discovery-geocode");
+  const geocodeSpy = vi.spyOn(geocode, "geocodeLocation").mockResolvedValue({
+    ok: true,
+    latitude: 24.86,
+    longitude: 67.01,
+  });
+  const { node, editor, publicClient } = await fixture();
+  const saved = await editor.saveDiscoveryProfile({
+    nodeId: node.id,
+    ...profile,
+    latitude: null,
+    longitude: null,
+    geocodedLocation: null,
+  });
+  expect(saved).toMatchObject({
+    latitude: 24.86,
+    longitude: 67.01,
+    geocodedLocation: "Karachi",
+    geocodeHint: null,
+  });
+  expect(await publicClient.getDiscoveryNode({ nodeId: node.id })).toMatchObject({
+    latitude: 24.86,
+    longitude: 67.01,
+  });
+
+  geocodeSpy.mockClear();
+  const manual = await editor.saveDiscoveryProfile({
+    nodeId: node.id,
+    ...profile,
+    latitude: 31.52,
+    longitude: 74.35,
+    geocodedLocation: null,
+  });
+  expect(manual).toMatchObject({ latitude: 31.52, longitude: 74.35, geocodedLocation: null });
+  expect(geocodeSpy).not.toHaveBeenCalled();
+
+  geocodeSpy.mockResolvedValue({ ok: false, reason: "unavailable" });
+  const failed = await editor.saveDiscoveryProfile({
+    nodeId: node.id,
+    ...profile,
+    latitude: null,
+    longitude: null,
+    geocodedLocation: null,
+  });
+  expect(failed).toMatchObject({
+    latitude: null,
+    longitude: null,
+    geocodeHint: expect.stringContaining("Map lookup is unavailable"),
+  });
+  geocodeSpy.mockRestore();
+});
+
 it("publishes attributed activity, shares events and removes cancelled evidence", async () => {
   const { node, editor, publicClient } = await fixture();
   const other = await fixture();

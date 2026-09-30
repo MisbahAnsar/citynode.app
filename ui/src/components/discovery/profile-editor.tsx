@@ -129,6 +129,8 @@ export function ProfileEditor({
               longitude: null,
               channels: [],
               published: false,
+              geocodedLocation: null,
+              geocodeHint: null,
             }
           }
         />
@@ -144,15 +146,27 @@ function ProfileForm({ initial }: { initial: Profile }) {
   const client = useQueryClient();
   const save = useMutation({
     mutationFn: () => api.saveDiscoveryProfile(profile),
-    onSuccess: () => {
+    onSuccess: (saved) => {
       setValidationError(null);
-      toast.success(profile.published ? "Profile saved and live on Explore" : "Profile saved");
+      setProfile(saved);
+      if (saved.geocodeHint) {
+        toast.warning(saved.geocodeHint);
+      } else {
+        toast.success(saved.published ? "Profile saved and live on Explore" : "Profile saved");
+      }
       return client.invalidateQueries({
         predicate: (q) => String(q.queryKey[0]).startsWith("discovery"),
       });
     },
     onError: (error: unknown) => toast.error(profileSaveErrorMessage(error)),
   });
+  const setCoords = (patch: { latitude?: number | null; longitude?: number | null }) =>
+    setProfile({
+      ...profile,
+      ...patch,
+      geocodedLocation: null,
+      geocodeHint: null,
+    });
   const setChannel = (index: number, patch: Partial<Profile["channels"][number]>) =>
     setProfile({
       ...profile,
@@ -238,8 +252,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
                 max={85}
                 value={profile.latitude ?? ""}
                 onChange={(e) =>
-                  setProfile({
-                    ...profile,
+                  setCoords({
                     latitude: e.target.value === "" ? null : Number(e.target.value),
                   })
                 }
@@ -256,8 +269,7 @@ function ProfileForm({ initial }: { initial: Profile }) {
                 max={180}
                 value={profile.longitude ?? ""}
                 onChange={(e) =>
-                  setProfile({
-                    ...profile,
+                  setCoords({
                     longitude: e.target.value === "" ? null : Number(e.target.value),
                   })
                 }
@@ -265,8 +277,18 @@ function ProfileForm({ initial }: { initial: Profile }) {
             </Field>
           </div>
           <FieldDescription>
-            The map pin should be a public place. Leave it empty if you only meet online.
+            Leave coordinates empty to place the pin from the city or venue (OpenStreetMap
+            Nominatim). Manual coordinates are kept as entered.
           </FieldDescription>
+          {profile.geocodeHint ? (
+            <p
+              role="status"
+              data-testid="discovery-profile-geocode-hint"
+              className="text-sm text-muted-foreground"
+            >
+              {profile.geocodeHint}
+            </p>
+          ) : null}
         </FieldGroup>
       </FieldSet>
 
