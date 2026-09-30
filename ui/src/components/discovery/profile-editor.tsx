@@ -248,9 +248,6 @@ function ProfileForm({ initial }: { initial: Profile }) {
               />
             </Field>
           </div>
-          <FieldDescription>
-            The map pin is placed from the city or venue (OpenStreetMap Nominatim).
-          </FieldDescription>
           {profile.geocodeHint ? (
             <p
               role="status"
