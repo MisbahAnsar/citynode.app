@@ -7,6 +7,13 @@ import {
   type TenantPublishConfigInput,
 } from "./dao-connect";
 import { trySendWithGasKey } from "./gas-key";
+import {
+  canAccountPropose,
+  type DaoPlan,
+  fetchSputnikPolicy,
+  proposeAsSession,
+  type SessionWallet,
+} from "./sputnik-proposals";
 
 const CONFIG_GAS = "300000000000000";
 
@@ -41,6 +48,74 @@ export async function publishDaoTenantConfig(
     gas: prepared.data.gas,
     attachedDeposit: prepared.data.attachedDeposit,
   });
+}
+
+function depositToYocto(raw: string | undefined): string {
+  if (!raw || raw === "0" || raw === "0 yocto") return "0";
+  if (raw.endsWith(" yocto")) return raw.slice(0, -" yocto".length);
+  return raw.replace(/\D/g, "") || "0";
+}
+
+export function buildMemberConfigProposalDescription(input: {
+  hostname: string;
+  title: string;
+  app?: { ui: TenantUiOverride };
+}): string {
+  const base = `Set homepage for ${input.hostname} — title '${input.title}'`;
+  return input.app ? `${base}, custom UI bundle` : base;
+}
+
+function configWritePlan(prepared: {
+  data: {
+    contractId: string;
+    methodName: string;
+    args: unknown;
+    gas: string;
+    attachedDeposit?: string;
+  };
+}): Extract<DaoPlan, { kind: "call" }> {
+  return {
+    kind: "call",
+    receiverId: prepared.data.contractId,
+    methodName: prepared.data.methodName,
+    args: prepared.data.args as Record<string, unknown>,
+    gas: prepared.data.gas,
+    attachedDeposit: depositToYocto(prepared.data.attachedDeposit),
+  };
+}
+
+/**
+ * Stages a tenant config write as a sputnik proposal signed by the member's
+ * session wallet — no Trezu DAO connection required. The DAO's AddProposal
+ * policy and proposal bond still apply.
+ */
+export async function publishMemberTenantConfig(
+  apiClient: ApiClient,
+  wallet: SessionWallet,
+  input: DaoTenantPublishInput,
+) {
+  const connected = await wallet.ensureConnected();
+  const accountId = wallet.getAccountId();
+  if (!connected || !accountId) {
+    throw new Error("Connect your NEAR wallet first");
+  }
+
+  const prepared = await prepareTenantConfigWrite(apiClient, input);
+  const plan = configWritePlan(prepared);
+
+  const policy = await fetchSputnikPolicy(input.daoAccountId);
+  if (!canAccountPropose(policy, accountId)) {
+    throw new Error(
+      `${accountId} cannot stage proposals on ${input.daoAccountId}: missing AddProposal permission`,
+    );
+  }
+
+  return proposeAsSession(
+    wallet,
+    input.daoAccountId,
+    plan,
+    buildMemberConfigProposalDescription(input),
+  );
 }
 
 export type TenantConfigPublishMode = "platform" | "dao";

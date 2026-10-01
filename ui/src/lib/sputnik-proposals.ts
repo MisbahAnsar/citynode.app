@@ -5,7 +5,7 @@
  * proposal matching and the call preview in the UI.
  */
 
-import { Near } from "near-kit";
+import { Amount, type FinalExecutionOutcome, Near } from "near-kit";
 
 let _near: Near | null = null;
 
@@ -59,6 +59,7 @@ export interface SputnikRole {
 
 export interface SputnikPolicy {
   roles: SputnikRole[];
+  proposal_bond?: string;
   default_vote_policy?: { threshold?: string | [number, number] };
 }
 
@@ -240,4 +241,77 @@ export function findPendingProposalForPlan(
       (proposal) => isPendingProposal(proposal) && proposalMatchesPlan(proposal, plan),
     ) ?? null
   );
+}
+
+/* ------------------------------------------- session-wallet proposal staging */
+
+function gasToRaw(gas: string): string {
+  const match = gas.match(/([\d.]+)\s*Tgas/);
+  if (!match) return gas.replace(/\D/g, "") || "0";
+  return BigInt(Math.round(Number(match[1]) * 1e12)).toString();
+}
+
+/**
+ * Sputnik `add_proposal` args carrying the plan as a proposal — the session
+ * wallet can stage treasury actions on a DAO it may propose to, without the
+ * DAO's own wallet connection.
+ */
+export function buildAddProposalArgs(plan: DaoPlan, description: string) {
+  const kind =
+    plan.kind === "transfer"
+      ? { Transfer: { token_id: "", receiver_id: plan.receiverId, amount: plan.amountYocto } }
+      : {
+          FunctionCall: {
+            receiver_id: plan.receiverId,
+            actions: [
+              {
+                method_name: plan.methodName,
+                args: btoa(JSON.stringify(plan.args)),
+                deposit: plan.attachedDeposit ?? "0",
+                gas: gasToRaw(plan.gas),
+              },
+            ],
+          },
+        };
+  return { proposal: { description, kind } };
+}
+
+export async function fetchProposalBond(daoAccountId: string): Promise<string> {
+  const policy = await getNear()
+    .view<{ proposal_bond?: string }>(daoAccountId, "get_policy", {})
+    .catch(() => null);
+  return policy?.proposal_bond ?? "0";
+}
+
+/** The wallet surface the session-account actions need, satisfied by the auth client. */
+export interface SessionWallet {
+  ensureConnected(): Promise<boolean>;
+  getAccountId(): string | null;
+  getNearClient(): Near;
+}
+
+/** Stages the plan as a proposal on the DAO, signed by the session wallet. */
+export async function proposeAsSession(
+  wallet: SessionWallet,
+  daoAccountId: string,
+  plan: DaoPlan,
+  description: string,
+): Promise<FinalExecutionOutcome> {
+  const connected = await wallet.ensureConnected();
+  const accountId = wallet.getAccountId();
+  if (!connected || !accountId) throw new Error("Connect your NEAR wallet first");
+  const bond = await fetchProposalBond(daoAccountId);
+  return wallet
+    .getNearClient()
+    .transaction(accountId)
+    .functionCall(
+      daoAccountId,
+      "add_proposal",
+      buildAddProposalArgs(plan, description) as unknown as Record<string, never>,
+      {
+        gas: "100 Tgas",
+        attachedDeposit: bond ? Amount.yocto(BigInt(bond)) : Amount.ZERO,
+      },
+    )
+    .send({ waitUntil: "EXECUTED" });
 }

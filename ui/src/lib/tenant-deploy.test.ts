@@ -1,13 +1,33 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApiClient, useAuthClient } from "@/app";
 import {
+  buildMemberConfigProposalDescription,
   publishDaoTenantConfig,
+  publishMemberTenantConfig,
   publishTenantConfigForMode,
   type TenantConfigPublishInput,
 } from "./tenant-deploy";
 
+vi.mock("./sputnik-proposals", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./sputnik-proposals")>();
+  return {
+    ...actual,
+    fetchSputnikPolicy: vi.fn(),
+    proposeAsSession: vi.fn(),
+  };
+});
+
+import { fetchSputnikPolicy, proposeAsSession, type SessionWallet } from "./sputnik-proposals";
+
 const makeClient = (prepareRegistryConfigWrite: ReturnType<typeof vi.fn>) =>
   ({ apps: { prepareRegistryConfigWrite } }) as unknown as ApiClient;
+
+const fetchSputnikPolicyMock = vi.mocked(fetchSputnikPolicy);
+const proposeAsSessionMock = vi.mocked(proposeAsSession);
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
 
 describe("publishDaoTenantConfig", () => {
   it("prepares the DAO-owned config and submits it through the Trezu signer", async () => {
@@ -371,5 +391,126 @@ describe("publishTenantConfigForMode", () => {
       }),
     ).rejects.toThrow("Switch your wallet to mainnet");
     expect(prepareRegistryConfigWrite).not.toHaveBeenCalled();
+  });
+});
+
+describe("buildMemberConfigProposalDescription", () => {
+  it("names the hostname and title", () => {
+    expect(
+      buildMemberConfigProposalDescription({
+        hostname: "chicago.citynode.app",
+        title: "Chicago",
+      }),
+    ).toBe("Set homepage for chicago.citynode.app — title 'Chicago'");
+  });
+
+  it("mentions a custom UI bundle when present", () => {
+    expect(
+      buildMemberConfigProposalDescription({
+        hostname: "chicago.citynode.app",
+        title: "Chicago",
+        app: { ui: { production: "https://cdn.example.com/ui.js", integrity: "sha384-abc" } },
+      }),
+    ).toBe("Set homepage for chicago.citynode.app — title 'Chicago', custom UI bundle");
+  });
+});
+
+describe("publishMemberTenantConfig", () => {
+  const input = {
+    daoAccountId: "chicago.sputnik-dao.near",
+    gatewayId: "citynode.app",
+    baseAccount: "everything.near",
+    hostname: "chicago.citynode.app",
+    title: "Chicago",
+  };
+
+  const prepared = {
+    data: {
+      contractId: "dev.everything.near",
+      methodName: "__fastdata_kv",
+      args: { "apps/chicago.sputnik-dao.near/citynode.app/bos.config.json": "{}" },
+      gas: "300 Tgas",
+      attachedDeposit: "0 yocto",
+    },
+  };
+
+  it("stages the config write through proposeAsSession when the wallet may propose", async () => {
+    const prepareRegistryConfigWrite = vi.fn().mockResolvedValue(prepared);
+    fetchSputnikPolicyMock.mockResolvedValue({
+      roles: [
+        {
+          name: "Requestor",
+          kind: { Group: ["member.near"] },
+          permissions: ["call:AddProposal"],
+        },
+      ],
+    });
+    proposeAsSessionMock.mockResolvedValue({ transaction: { hash: "staged" } } as never);
+    const wallet = {
+      ensureConnected: vi.fn().mockResolvedValue(true),
+      getAccountId: vi.fn().mockReturnValue("member.near"),
+      getNearClient: vi.fn(),
+    } satisfies SessionWallet;
+
+    const result = await publishMemberTenantConfig(
+      makeClient(prepareRegistryConfigWrite),
+      wallet,
+      input,
+    );
+
+    expect(proposeAsSessionMock).toHaveBeenCalledWith(
+      wallet,
+      "chicago.sputnik-dao.near",
+      {
+        kind: "call",
+        receiverId: "dev.everything.near",
+        methodName: "__fastdata_kv",
+        args: prepared.data.args,
+        gas: "300 Tgas",
+        attachedDeposit: "0",
+      },
+      "Set homepage for chicago.citynode.app — title 'Chicago'",
+    );
+    expect(result).toEqual({ transaction: { hash: "staged" } });
+  });
+
+  it("refuses before staging when the wallet lacks AddProposal", async () => {
+    const prepareRegistryConfigWrite = vi.fn().mockResolvedValue(prepared);
+    fetchSputnikPolicyMock.mockResolvedValue({
+      roles: [
+        {
+          name: "Council",
+          kind: { Group: ["council.near"] },
+          permissions: ["call:VoteApprove"],
+        },
+      ],
+    });
+    const wallet = {
+      ensureConnected: vi.fn().mockResolvedValue(true),
+      getAccountId: vi.fn().mockReturnValue("member.near"),
+      getNearClient: vi.fn(),
+    } satisfies SessionWallet;
+
+    await expect(
+      publishMemberTenantConfig(makeClient(prepareRegistryConfigWrite), wallet, input),
+    ).rejects.toThrow(
+      "member.near cannot stage proposals on chicago.sputnik-dao.near: missing AddProposal permission",
+    );
+    expect(proposeAsSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("requires a connected session wallet before preparing", async () => {
+    const prepareRegistryConfigWrite = vi.fn();
+    const wallet = {
+      ensureConnected: vi.fn().mockResolvedValue(false),
+      getAccountId: vi.fn().mockReturnValue(null),
+      getNearClient: vi.fn(),
+    } satisfies SessionWallet;
+
+    await expect(
+      publishMemberTenantConfig(makeClient(prepareRegistryConfigWrite), wallet, input),
+    ).rejects.toThrow("Connect your NEAR wallet first");
+    expect(prepareRegistryConfigWrite).not.toHaveBeenCalled();
+    expect(proposeAsSessionMock).not.toHaveBeenCalled();
   });
 });
