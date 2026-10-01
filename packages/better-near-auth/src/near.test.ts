@@ -155,7 +155,7 @@ vi.mock("near-kit", () => {
   };
 });
 
-vi.mock("@fastnear/near-connect", () => ({
+vi.mock("@hot-labs/near-connect", () => ({
   NearConnector: vi.fn().mockImplementation(function (
     this: unknown,
     { network }: { network: "mainnet" | "testnet" },
@@ -1254,7 +1254,7 @@ describe("siwnClient getActions", () => {
     Object.defineProperty(globalThis, "window", { configurable: true, value: {} });
 
     try {
-      const { NearConnector } = await import("@fastnear/near-connect");
+      const { NearConnector } = await import("@hot-labs/near-connect");
       const connectorMock = NearConnector as any;
       const callStart = connectorMock.mock.calls.length;
       const { actions, plugin } = setupClient(null);
@@ -1310,7 +1310,7 @@ describe("siwnClient getActions", () => {
     mockWalletSignMessage.mockClear();
 
     try {
-      const { NearConnector } = await import("@fastnear/near-connect");
+      const { NearConnector } = await import("@hot-labs/near-connect");
       const connectorMock = NearConnector as any;
       const callStart = connectorMock.mock.calls.length;
       const { actions, $fetch } = setupClient(null, (path) =>
@@ -1364,7 +1364,7 @@ describe("siwnClient getActions", () => {
     Object.defineProperty(globalThis, "window", { configurable: true, value: {} });
 
     try {
-      const { NearConnector } = await import("@fastnear/near-connect");
+      const { NearConnector } = await import("@hot-labs/near-connect");
       const connectorMock = NearConnector as any;
       const callStart = connectorMock.mock.calls.length;
       const { sessionAtom } = setupClient(null);
