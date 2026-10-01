@@ -94,8 +94,6 @@ test.describe("Onboarding page", () => {
       panel.scrollTop = panel.scrollHeight;
       return canOverflow && panel.scrollTop > 0;
     });
-    expect(stillScrollable, "a keyboard-shortened viewport must still scroll the panel").toBe(
-      true,
-    );
+    expect(stillScrollable, "a keyboard-shortened viewport must still scroll the panel").toBe(true);
   });
 });
