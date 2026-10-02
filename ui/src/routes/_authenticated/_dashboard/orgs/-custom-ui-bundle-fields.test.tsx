@@ -119,7 +119,7 @@ describe("CustomUiBundleFields", () => {
 
     await waitFor(() =>
       expect(harness.toastError).toHaveBeenCalledWith(
-        "empty.near publishes no custom UI bundle yet — run `bos publish --deploy` in the app repo with a local UI first.",
+        "empty.near publishes no custom UI bundle yet — run `bos deploy` in the app repo with a local UI first.",
       ),
     );
     expect(input("test-bundle-ui-url").value).toBe("");

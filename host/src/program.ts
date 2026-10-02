@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
-import { Cause, Effect, Exit, Fiber, FiberHandle, Layer, ManagedRuntime } from "effect";
+import { Cause, Effect, Exit, Fiber, FiberHandle, Layer, ManagedRuntime, Option } from "effect";
 import { suppressPgQueryQueueDeprecation } from "everything-dev/db";
+import { slotPins } from "everything-dev/fingerprint";
 import { type Context, Hono } from "hono";
 import type { AuthVariables } from "./lib/auth";
 import { getCspStrict, SecurityMiddleware } from "./middleware/security";
@@ -11,9 +12,11 @@ import { createSsrFallbackHandler } from "./routes/ssr";
 import { createSessionMiddleware, registerAuthHandler } from "./services/auth";
 import { ConfigService, type RuntimeConfig } from "./services/config";
 import { FederationLifecycle } from "./services/federation.server";
-import { startIntegrityMonitor } from "./services/integrity-monitor";
 import { closeMcpServer } from "./services/mcp";
 import { PluginsService } from "./services/plugins";
+import { deploymentFingerprint, RuntimeSnapshot } from "./services/runtime-snapshot";
+import { SnapshotCoordinator } from "./services/snapshot-coordinator";
+import { SnapshotWatch, watchIntervalMs } from "./services/snapshot-watch";
 import { ClientConfigCache } from "./services/ssr-render";
 import {
   composeUi,
@@ -55,6 +58,8 @@ export const createStartServer = (onReady?: () => void) =>
       ? { status: "composing" }
       : { status: "disabled" };
 
+    const snapshot = yield* RuntimeSnapshot;
+    const getBaseConfig = async () => (await Effect.runPromise(snapshot.get)).config;
     const app = new Hono<HonoEnv>();
 
     app.onError((err: unknown, c: Context<HonoEnv>) => {
@@ -116,6 +121,24 @@ export const createStartServer = (onReady?: () => void) =>
       );
     });
 
+    app.get("/.well-known/version", (c: Context<HonoEnv>) =>
+      c.json(
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const state = yield* snapshot.get;
+            const watch = yield* Effect.serviceOption(SnapshotWatch);
+            const lastOutcome = Option.isSome(watch) ? watch.value.lastOutcome : undefined;
+            return {
+              fingerprint: state.config.deploymentFingerprint ?? state.fingerprint,
+              slots: state.pointer ? slotPins(state.pointer as never) : {},
+              ...(lastOutcome !== undefined ? { watch: { lastOutcome } } : {}),
+            };
+          }),
+        ),
+        { headers: { "cache-control": "public, max-age=30" } },
+      ),
+    );
+
     app.get("/.well-known/mcp.json", (c: Context<HonoEnv>) => {
       const url = new URL(c.req.url);
       return c.json({
@@ -141,7 +164,7 @@ export const createStartServer = (onReady?: () => void) =>
       ssrEnabled,
     };
 
-    app.on(["GET", "HEAD"], "*", createStaticAssetProxyHandler(config));
+    app.on(["GET", "HEAD"], "*", createStaticAssetProxyHandler(config, getBaseConfig));
 
     const sessionMiddleware = createSessionMiddleware(plugins);
 
@@ -164,7 +187,14 @@ export const createStartServer = (onReady?: () => void) =>
 
     app.get(
       "*",
-      createSsrFallbackHandler(config, plugins, CSP_STRICT, composeCache, clientConfigCache),
+      createSsrFallbackHandler(
+        config,
+        plugins,
+        CSP_STRICT,
+        composeCache,
+        clientConfigCache,
+        getBaseConfig,
+      ),
     );
 
     const startHttpServer = () => {
@@ -266,16 +296,24 @@ export const runServer = (input: ServerInput): ServerHandle => {
       process.env[key] = value;
     }
   }
+  input.config.deploymentFingerprint = deploymentFingerprint(input.config);
   const ConfigLive = Layer.succeed(ConfigService, input.config);
   const AppLive = Layer.provideMerge(PluginsService.Live, ConfigLive);
+  const SnapshotLive = RuntimeSnapshot.layer.pipe(Layer.provide(ConfigLive));
+  const CoordinatorLive = SnapshotCoordinator.layer.pipe(Layer.provide(SnapshotLive));
+  const WatchLive = SnapshotWatch.layer(watchIntervalMs()).pipe(
+    Layer.provide(CoordinatorLive),
+    Layer.provide(SnapshotLive),
+    Layer.provide(ConfigLive),
+  );
   const ServerLive = Layer.mergeAll(
     Layer.provideMerge(SecurityMiddleware.Live, AppLive),
     input.composeCache ? UiComposeCache.layerFrom(input.composeCache) : UiComposeCache.layer,
     ClientConfigCache.layer,
     FederationLifecycle.layer,
+    Layer.provideMerge(CoordinatorLive, SnapshotLive),
+    WatchLive,
   );
-
-  const stopMonitor = startIntegrityMonitor(input.config);
 
   const runtime = ManagedRuntime.make(ServerLive);
   let programFiber: Fiber.Fiber<void, unknown> | null = null;
@@ -300,7 +338,6 @@ export const runServer = (input: ServerInput): ServerHandle => {
 
   const shutdown = async () => {
     logger.info("[Server] Shutting down...");
-    stopMonitor();
 
     if (programFiber) {
       await Effect.runPromise(

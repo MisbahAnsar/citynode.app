@@ -2,6 +2,7 @@ import { type Dispatch, type SetStateAction, useState } from "react";
 import { toast } from "sonner";
 import {
   computeSsrEntryIntegrity,
+  computeSubresourceIntegrity,
   computeUiEntryIntegrity,
   normalizeBundleBaseUrl,
   type TenantConfigDraft,
@@ -54,12 +55,22 @@ export function CustomUiBundleFields({
       const result = await apiClient.apps.getRegistryApp({ accountId: account, gatewayId });
       const resolved = result.data?.resolvedConfig ?? null;
       const ui =
-        (resolved?.app as { ui?: { production?: unknown; integrity?: unknown } } | null)?.ui ?? {};
+        (
+          resolved?.app as {
+            ui?: {
+              production?: unknown;
+              integrity?: unknown;
+              pin?: { manifest?: unknown; integrity?: unknown };
+            };
+          } | null
+        )?.ui ?? {};
       const production = typeof ui.production === "string" ? ui.production : "";
       const integrity = typeof ui.integrity === "string" ? ui.integrity : "";
-      if (!production || !integrity) {
+      const pinManifest = typeof ui.pin?.manifest === "string" ? ui.pin.manifest : "";
+      const pinIntegrity = typeof ui.pin?.integrity === "string" ? ui.pin.integrity : "";
+      if (!production || (!integrity && !(pinManifest && pinIntegrity))) {
         toast.error(
-          `${account} publishes no custom UI bundle yet — run \`bos publish --deploy\` in the app repo with a local UI first.`,
+          `${account} publishes no custom UI bundle yet — run \`bos deploy\` in the app repo with a local UI first.`,
         );
         return;
       }
@@ -70,13 +81,15 @@ export function CustomUiBundleFields({
       setDraft((prev) => ({
         ...prev,
         uiProduction: production,
-        uiIntegrity: integrity,
+        uiIntegrity: pinManifest ? "" : integrity,
+        uiManifest: pinManifest,
+        uiPinIntegrity: pinIntegrity,
         ...(allowSsr && ssrUrl && ssrIntegrity ? { ssrUrl, ssrIntegrity } : {}),
       }));
       toast.success(`Bundle and integrity filled from ${account}`);
     } catch {
       toast.error(
-        `No published config for ${account} on this gateway — run \`bos publish --deploy\` in the app repo first.`,
+        `No published config for ${account} on this gateway — run \`bos deploy\` in the app repo first.`,
       );
     } finally {
       setFetchingSource(false);
@@ -114,6 +127,21 @@ export function CustomUiBundleFields({
     if (!draft.uiProduction) {
       toast.error("Enter the UI bundle URL first");
       return;
+    }
+    if (draft.uiManifest) {
+      if (!draft.uiPinIntegrity) {
+        toast.error("Enter the pin integrity first (or use Verify to fill it)");
+      }
+      return onVerifyBundle(
+        draft.uiManifest,
+        draft.uiPinIntegrity,
+        (manifestName) =>
+          computeSubresourceIntegrity(
+            `${draft.uiProduction.replace(/\/$/, "")}/${manifestName.replace(/^\//, "")}`,
+          ),
+        (computed) => setDraft((prev) => ({ ...prev, uiPinIntegrity: computed })),
+        "UI pin",
+      );
     }
     return onVerifyBundle(
       draft.uiProduction,
@@ -201,13 +229,51 @@ export function CustomUiBundleFields({
       </div>
       <ConfigField
         id={`${idPrefix}-ui-integrity`}
-        label="UI integrity"
+        label="UI integrity (direct entry hash)"
         value={draft.uiIntegrity}
-        onChange={(value) => setDraft((prev) => ({ ...prev, uiIntegrity: value }))}
+        onChange={(value) =>
+          setDraft((prev) => ({
+            ...prev,
+            uiIntegrity: value,
+            ...(value ? { uiManifest: "", uiPinIntegrity: "" } : {}),
+          }))
+        }
         placeholder="sha384-…"
         mono
         disabled={disabled}
       />
+      <ConfigField
+        id={`${idPrefix}-ui-pin-manifest`}
+        label="UI version-manifest pin"
+        value={draft.uiManifest}
+        onChange={(value) =>
+          setDraft((prev) => ({
+            ...prev,
+            uiManifest: value,
+            ...(value ? { uiIntegrity: "" } : {}),
+          }))
+        }
+        onBlur={() =>
+          setDraft((prev) => ({
+            ...prev,
+            uiManifest: prev.uiManifest.trim().replace(/^\//, ""),
+          }))
+        }
+        placeholder="versions/<version-id>.json"
+        mono
+        disabled={disabled}
+      />
+      {draft.uiManifest && (
+        <ConfigField
+          id={`${idPrefix}-ui-pin-integrity`}
+          label="Pin integrity (the manifest document's SRI)"
+          value={draft.uiPinIntegrity}
+          onChange={(value) => setDraft((prev) => ({ ...prev, uiPinIntegrity: value }))}
+          placeholder="sha384-…"
+          mono
+          disabled={disabled}
+        />
+      )}
       {allowSsr && (
         <>
           <div className="flex flex-col gap-1">

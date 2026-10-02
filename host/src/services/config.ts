@@ -80,6 +80,7 @@ export function buildRuntimeClientConfig(
   return {
     env: config.env,
     account: activeRuntime.accountId,
+    deploymentFingerprint: config.deploymentFingerprint,
     networkId: config.account.endsWith(".testnet") ? "testnet" : "mainnet",
     hostUrl: requestUrl.origin,
     assetsUrl: coreUiUrl,
@@ -94,6 +95,7 @@ export function buildRuntimeClientConfig(
         ? `${uiConfig.publicUrl.replace(/\/$/, "")}/mf-manifest.json`
         : uiConfig.entry,
       integrity: uiConfig.integrity,
+      entryUrl: uiConfig.entryUrl,
       compose: composePayload,
     },
     api: config.api
@@ -136,6 +138,7 @@ export function buildRuntimeClientConfig(
                     integrity: plugin.ui.integrity,
                     ssrUrl: plugin.ui.ssrUrl,
                     ssrIntegrity: plugin.ui.ssrIntegrity,
+                    ...(plugin.ui.entryUrl ? { entryUrl: plugin.ui.entryUrl } : {}),
                   },
                 }
               : {}),
