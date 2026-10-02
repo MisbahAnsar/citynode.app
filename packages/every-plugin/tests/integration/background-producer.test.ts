@@ -1,8 +1,10 @@
 import { expect, it } from "@effect/vitest";
-import { Clock, Effect, Stream } from "effect";
+import { Effect, Stream } from "effect";
 import { createPluginRuntime } from "every-plugin/runtime";
 import { describe } from "vitest";
 import { TEST_REGISTRY } from "../registry";
+
+const wallClockNow = () => Date.now();
 
 const backgroundConfig = (baseUrl: string) => ({
   variables: {
@@ -87,13 +89,14 @@ describe.sequential("Background Producer Integration Tests", () => {
         yield* Effect.log(`✅ Collected ${eventArray.length} background events in real-time`);
         expect(eventArray.length).toBe(3);
 
-        // Verify event structure and sequential ordering (real-time broadcasting)
-        const nowMs = yield* Clock.currentTimeMillis;
+        // Plugin runtime uses a live Clock; @effect/vitest installs TestClock
+        // (epoch 0) in this fiber — compare against wall time, not TestClock.
+        const wallNow = wallClockNow();
         for (const event of eventArray) {
           expect(event.id).toMatch(/^bg-\d+$/);
           expect(event.index).toBeGreaterThan(0);
           expect(typeof event.timestamp).toBe("number");
-          expect(event.timestamp).toBeLessThanOrEqual(nowMs);
+          expect(event.timestamp).toBeLessThanOrEqual(wallNow);
         }
 
         // Verify sequential ordering
@@ -171,13 +174,14 @@ describe.sequential("Background Producer Integration Tests", () => {
           `✅ Broadcast verified: ${overlap.length} events received by both consumers`,
         );
 
-        // Each event should have correct structure
-        const now = yield* Clock.currentTimeMillis;
+        // Plugin runtime uses a live Clock; @effect/vitest installs TestClock
+        // (epoch 0) in this fiber — compare against wall time, not TestClock.
+        const wallNow = wallClockNow();
         [...array1, ...array2].forEach((event) => {
           expect(event.id).toMatch(/^bg-\d+$/);
           expect(event.index).toBeGreaterThan(0);
           expect(typeof event.timestamp).toBe("number");
-          expect(event.timestamp).toBeLessThanOrEqual(now);
+          expect(event.timestamp).toBeLessThanOrEqual(wallNow);
         });
 
         // Verify each consumer individually has sequential events
