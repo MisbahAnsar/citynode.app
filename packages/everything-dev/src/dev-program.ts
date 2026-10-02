@@ -26,6 +26,12 @@ import {
   type ProjectEnvService,
 } from "./env/project-env";
 import { buildRegistryConfigUrl } from "./fastkv";
+import {
+  detectAutoStartContext,
+  isDockerAvailable,
+  runDockerComposeUp,
+  shouldAutoStartDocker,
+} from "./infra/docker";
 import { materializeViaLayer } from "./infra/materializer";
 import { planInfra } from "./infra/planner";
 import { preflightLocalInfra } from "./infra/preflight";
@@ -334,7 +340,32 @@ export const devBootstrap = (
         if (key === "BASE_URL" || key === "CORS_ORIGIN") process.env[key] = value;
       }
     });
-    const preflightFailures = yield* preflightLocalInfra(plan.envGenerated, mergedEnv);
+    let preflightFailures = yield* preflightLocalInfra(plan.envGenerated, mergedEnv);
+    if (
+      preflightFailures.length > 0 &&
+      shouldAutoStartDocker(preflightFailures, {
+        ...detectAutoStartContext(deps.configDir),
+        dockerAvailable: yield* Effect.promise(isDockerAvailable),
+      })
+    ) {
+      const compose = yield* step(timings, "docker compose up", () =>
+        runDockerComposeUp(deps.configDir),
+      );
+      if (compose.ok) {
+        preflightFailures = yield* preflightLocalInfra(plan.envGenerated, mergedEnv);
+      } else {
+        preflightFailures = [
+          ...preflightFailures,
+          {
+            secret: "docker-compose",
+            host: "localhost",
+            port: 0,
+            error: `docker compose up -d --wait failed${compose.tail ? `:\n${compose.tail}` : ""}`,
+            tcpReachable: false,
+          },
+        ];
+      }
+    }
     if (preflightFailures.length > 0) {
       return yield* new DevPreflightFailed({ messages: preflightFailures.map((f) => f.error) });
     }

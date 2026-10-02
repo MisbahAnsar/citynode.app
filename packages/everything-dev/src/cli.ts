@@ -282,6 +282,7 @@ async function main() {
         build: "Building...",
         "resolve config": "Resolving config...",
         ports: "Finding available ports...",
+        "docker compose up": "Starting local Postgres...",
         "generate artifacts": "Generating code artifacts...",
       };
 
@@ -500,11 +501,9 @@ async function main() {
       console.log(colors.dim("  Next steps:"));
       console.log(colors.dim(`    cd ${result.directory}`));
       if (!initInput.noInstall) {
-        console.log(colors.dim("    docker compose up -d --wait"));
         console.log(colors.dim("    bun run dev"));
       } else {
         console.log(colors.dim("    bun install"));
-        console.log(colors.dim("    docker compose up -d --wait"));
         console.log(colors.dim("    bun run dev"));
       }
       console.log();
@@ -518,13 +517,13 @@ async function main() {
         if (shouldStartDocker === true) {
           const dockerSpinner = p.spinner();
           dockerSpinner.start("Starting Docker services");
-          try {
-            await runDockerComposeUp(result.targetDir);
+          const compose = await runDockerComposeUp(result.targetDir);
+          if (compose.ok) {
             dockerSpinner.stop("Docker services ready");
-          } catch (error) {
+          } else {
             dockerSpinner.stop("Docker services not started");
             p.log.warn(
-              `docker compose up -d --wait failed: ${error instanceof Error ? error.message : error}`,
+              `docker compose up -d --wait failed${compose.tail ? `:\n${compose.tail}` : ""}`,
             );
           }
         }
